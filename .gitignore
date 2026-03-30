@@ -13,3 +13,5 @@ Thumbs.db
 .idea/
 coverage/
 *.tsbuildinfo
+.next/
+next-env.d.ts
