@@ -1,0 +1,125 @@
+import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
+import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
+import { PgBoss } from 'pg-boss';
+import { healthRoutes } from './api/health.routes.js';
+import { authRoutes } from './api/auth.routes.js';
+import { builderApiRoutes } from './api/builder-api.routes.js';
+import { creditsRoutes } from './api/credits.routes.js';
+import { stripeWebhookRoutes } from './api/stripe-webhook.routes.js';
+import { PayoutService } from './services/payout.service.js';
+import { ApiError } from './lib/errors.js';
+
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const HOST = process.env.HOST || '0.0.0.0';
+
+export function buildApp() {
+  const app = Fastify({
+    logger: true,
+  });
+
+  // Global error handler for structured error responses
+  app.setErrorHandler((error: Error & { validation?: unknown; statusCode?: number }, _request, reply) => {
+    if (error instanceof ApiError) {
+      reply.status(error.statusCode).send(error.toResponse());
+      return;
+    }
+
+    // Fastify validation errors
+    if (error.validation) {
+      reply.status(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: error.message,
+          context: { validation: error.validation },
+        },
+      });
+      return;
+    }
+
+    app.log.error(error);
+    reply.status(500).send({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+      },
+    });
+  });
+
+  // Cookie support (required by OAuth and session plugins)
+  app.register(cookie, {
+    secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+  });
+
+  // CORS
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',');
+  app.register(cors, {
+    origin: allowedOrigins,
+    credentials: true,
+  });
+
+  // Rate limiting: 100 req/min per API key (from 001-foundation-auth spec)
+  app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      return request.headers.authorization ?? request.ip;
+    },
+    errorResponseBuilder: () => ({
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many requests. Please retry after the rate limit window resets.',
+      },
+    }),
+  });
+
+  // Register route plugins
+  app.register(healthRoutes);
+  app.register(authRoutes, { prefix: '/auth' });
+  app.register(builderApiRoutes, { prefix: '/api/v1' });
+  app.register(creditsRoutes, { prefix: '/api/v1/credits' });
+  app.register(stripeWebhookRoutes, { prefix: '/webhooks' });
+
+  return app;
+}
+
+async function startPayoutScheduler(logger: { info: (msg: string) => void; error: (err: unknown, msg: string) => void }) {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    logger.info('DATABASE_URL not set, skipping payout scheduler');
+    return;
+  }
+
+  const boss = new PgBoss(databaseUrl);
+  await boss.start();
+
+  const PAYOUT_JOB = 'weekly-payout-aggregation';
+
+  await boss.work(PAYOUT_JOB, async () => {
+    logger.info('Running weekly payout aggregation...');
+    const count = await PayoutService.runWeeklyAggregation();
+    logger.info(`Weekly payout aggregation complete: ${count} records created`);
+  });
+
+  // Schedule weekly on Sunday at midnight UTC
+  await boss.schedule(PAYOUT_JOB, '0 0 * * 0');
+
+  logger.info('Payout scheduler registered: weekly on Sunday at 00:00 UTC');
+}
+
+async function start() {
+  const app = buildApp();
+
+  try {
+    await app.listen({ port: PORT, host: HOST });
+    app.log.info(`Server listening on ${HOST}:${PORT}`);
+
+    await startPayoutScheduler(app.log);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}
+
+start();
