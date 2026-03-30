@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/api/auth'];
+const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password', '/api/auth'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -14,9 +14,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for API key cookie
-  const apiKey = request.cookies.get('ba_api_key');
-  if (!apiKey?.value) {
+  // Check for JWT cookie (new flow) or legacy API key cookie
+  const token = request.cookies.get('ba_token');
+  const legacyApiKey = request.cookies.get('ba_api_key');
+  const authValue = token?.value || legacyApiKey?.value;
+
+  if (!authValue) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
@@ -25,7 +28,7 @@ export function middleware(request: NextRequest) {
   // Inject Authorization header for proxied API requests
   if (pathname.startsWith('/api/v1')) {
     const headers = new Headers(request.headers);
-    headers.set('Authorization', `Bearer ${apiKey.value}`);
+    headers.set('Authorization', `Bearer ${authValue}`);
     return NextResponse.next({ request: { headers } });
   }
 
