@@ -2,12 +2,14 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
-import { PgBoss } from 'pg-boss';
+import { getJobManager } from './lib/jobs.js';
 import { healthRoutes } from './api/health.routes.js';
 import { authRoutes } from './api/auth.routes.js';
 import { builderApiRoutes } from './api/builder-api.routes.js';
 import { creditsRoutes } from './api/credits.routes.js';
 import { stripeWebhookRoutes } from './api/stripe-webhook.routes.js';
+import { testCasesRoutes } from './api/test-cases.routes.js';
+import { templatesRoutes } from './api/templates.routes.js';
 import { PayoutService } from './services/payout.service.js';
 import { ApiError } from './lib/errors.js';
 
@@ -80,32 +82,29 @@ export function buildApp() {
   app.register(builderApiRoutes, { prefix: '/api/v1' });
   app.register(creditsRoutes, { prefix: '/api/v1/credits' });
   app.register(stripeWebhookRoutes, { prefix: '/webhooks' });
+  app.register(testCasesRoutes, { prefix: '/api/v1/test-cases' });
+  app.register(templatesRoutes, { prefix: '/api/v1/templates' });
 
   return app;
 }
 
-async function startPayoutScheduler(logger: { info: (msg: string) => void; error: (err: unknown, msg: string) => void }) {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    logger.info('DATABASE_URL not set, skipping payout scheduler');
-    return;
+async function startWorkers(logger: { info: (msg: string) => void; error: (err: unknown, msg: string) => void }) {
+  try {
+    const boss = await getJobManager();
+
+    // Payout scheduler
+    const PAYOUT_JOB = 'weekly-payout-aggregation';
+    await boss.work(PAYOUT_JOB, async () => {
+      logger.info('Running weekly payout aggregation...');
+      const count = await PayoutService.runWeeklyAggregation();
+      logger.info(`Weekly payout aggregation complete: ${count} records created`);
+    });
+    await boss.schedule(PAYOUT_JOB, '0 0 * * 0');
+
+    logger.info('Workers registered: payout scheduler');
+  } catch (err) {
+    logger.error(err, 'Failed to start workers (DATABASE_URL may not be set)');
   }
-
-  const boss = new PgBoss(databaseUrl);
-  await boss.start();
-
-  const PAYOUT_JOB = 'weekly-payout-aggregation';
-
-  await boss.work(PAYOUT_JOB, async () => {
-    logger.info('Running weekly payout aggregation...');
-    const count = await PayoutService.runWeeklyAggregation();
-    logger.info(`Weekly payout aggregation complete: ${count} records created`);
-  });
-
-  // Schedule weekly on Sunday at midnight UTC
-  await boss.schedule(PAYOUT_JOB, '0 0 * * 0');
-
-  logger.info('Payout scheduler registered: weekly on Sunday at 00:00 UTC');
 }
 
 async function start() {
@@ -115,7 +114,7 @@ async function start() {
     await app.listen({ port: PORT, host: HOST });
     app.log.info(`Server listening on ${HOST}:${PORT}`);
 
-    await startPayoutScheduler(app.log);
+    await startWorkers(app.log);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
