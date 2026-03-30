@@ -11,6 +11,7 @@ import { stripeWebhookRoutes } from './api/stripe-webhook.routes.js';
 import { testCasesRoutes } from './api/test-cases.routes.js';
 import { templatesRoutes } from './api/templates.routes.js';
 import { PayoutService } from './services/payout.service.js';
+import { testerRoutes } from './api/tester.routes.js';
 import { webhookRoutes } from './api/webhook.routes.js';
 import { WebhookService, WEBHOOK_JOB } from './services/webhook.service.js';
 import { ApiError } from './lib/errors.js';
@@ -86,6 +87,7 @@ export function buildApp() {
   app.register(stripeWebhookRoutes, { prefix: '/webhooks' });
   app.register(testCasesRoutes, { prefix: '/api/v1/test-cases' });
   app.register(templatesRoutes, { prefix: '/api/v1/templates' });
+  app.register(testerRoutes, { prefix: '/api/v1/tester' });
   app.register(webhookRoutes, { prefix: '/api/v1' });
 
   return app;
