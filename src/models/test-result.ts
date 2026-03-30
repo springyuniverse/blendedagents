@@ -11,6 +11,7 @@ export interface TestResult {
   steps_blocked: number;
   steps_total: number;
   recording_url: string | null;
+  machine_summary: Record<string, unknown> | null;
   created_at: Date;
 }
 
