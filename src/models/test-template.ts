@@ -7,6 +7,9 @@ export interface TestTemplate {
   description: string | null;
   steps: Record<string, unknown>[];
   metadata: Record<string, unknown>;
+  environment: string | null;
+  tags: string[];
+  expected_behavior: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -31,12 +34,17 @@ export const TestTemplateModel = {
     description?: string | null;
     steps: Record<string, unknown>[];
     metadata?: Record<string, unknown>;
+    environment?: string | null;
+    tags?: string[];
+    expected_behavior?: string | null;
   }): Promise<TestTemplate> {
     const [row] = await sql<TestTemplate[]>`
-      INSERT INTO test_templates (builder_id, title, description, steps, metadata)
+      INSERT INTO test_templates (builder_id, title, description, steps, metadata, environment, tags, expected_behavior)
       VALUES (
         ${data.builder_id}, ${data.title}, ${data.description ?? null},
-        ${sql.json(data.steps as never)}, ${sql.json((data.metadata ?? {}) as never)}
+        ${sql.json(data.steps as never)}, ${sql.json((data.metadata ?? {}) as never)},
+        ${data.environment ?? null}, ${sql.json((data.tags ?? []) as never)},
+        ${data.expected_behavior ?? null}
       )
       RETURNING *
     `;
