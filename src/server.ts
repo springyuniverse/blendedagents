@@ -11,6 +11,8 @@ import { stripeWebhookRoutes } from './api/stripe-webhook.routes.js';
 import { testCasesRoutes } from './api/test-cases.routes.js';
 import { templatesRoutes } from './api/templates.routes.js';
 import { PayoutService } from './services/payout.service.js';
+import { webhookRoutes } from './api/webhook.routes.js';
+import { WebhookService, WEBHOOK_JOB } from './services/webhook.service.js';
 import { ApiError } from './lib/errors.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -84,6 +86,7 @@ export function buildApp() {
   app.register(stripeWebhookRoutes, { prefix: '/webhooks' });
   app.register(testCasesRoutes, { prefix: '/api/v1/test-cases' });
   app.register(templatesRoutes, { prefix: '/api/v1/templates' });
+  app.register(webhookRoutes, { prefix: '/api/v1' });
 
   return app;
 }
@@ -101,7 +104,17 @@ async function startWorkers(logger: { info: (msg: string) => void; error: (err: 
     });
     await boss.schedule(PAYOUT_JOB, '0 0 * * 0');
 
-    logger.info('Workers registered: payout scheduler');
+    // Webhook delivery worker
+    interface WebhookJobData { testCaseId: string; deliveryId?: string; attemptNumber?: number }
+    await boss.work<WebhookJobData>(WEBHOOK_JOB, async (jobs) => {
+      for (const job of jobs) {
+        const { testCaseId, deliveryId, attemptNumber } = job.data;
+        logger.info(`Delivering webhook for test case ${testCaseId} (attempt ${attemptNumber ?? 1})`);
+        await WebhookService.deliverWebhook(testCaseId, attemptNumber ?? 1, deliveryId);
+      }
+    });
+
+    logger.info('Workers registered: payout scheduler, webhook delivery');
   } catch (err) {
     logger.error(err, 'Failed to start workers (DATABASE_URL may not be set)');
   }
