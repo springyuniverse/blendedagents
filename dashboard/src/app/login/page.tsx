@@ -33,7 +33,9 @@ function LoginContent() {
 
           {error && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4">
-              {error === 'oauth_failed'
+              {error === 'not_configured'
+                ? 'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.'
+                : error === 'oauth_failed'
                 ? 'Google sign-in failed. Please try again.'
                 : 'An error occurred. Please try again.'}
             </div>
