@@ -1,16 +1,23 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { createClient } from '@/lib/supabase';
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
+  const [loading, setLoading] = useState(false);
 
-  const handleGoogleLogin = () => {
-    window.location.href = `${BACKEND_URL}/auth/google`;
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    const supabase = createClient();
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + '/tasks',
+      },
+    });
   };
 
   return (
@@ -34,7 +41,8 @@ function LoginContent() {
 
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -54,7 +62,7 @@ function LoginContent() {
                 fill="#EA4335"
               />
             </svg>
-            Sign in with Google
+            {loading ? 'Redirecting...' : 'Sign in with Google'}
           </button>
 
           <p className="mt-4 text-xs text-gray-500 text-center">

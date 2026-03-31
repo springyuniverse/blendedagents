@@ -6,8 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AvailabilityToggle } from '@/components/AvailabilityToggle';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { createClient } from '@/lib/supabase';
 
 function Sidebar() {
   const pathname = usePathname();
@@ -23,14 +22,8 @@ function Sidebar() {
   ];
 
   const handleLogout = async () => {
-    try {
-      await fetch(`${BACKEND_URL}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch {
-      // Ignore errors, still redirect to login
-    }
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push('/login');
   };
 

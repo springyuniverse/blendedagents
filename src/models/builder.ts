@@ -4,6 +4,7 @@ export interface Builder {
   id: string;
   display_name: string;
   email: string;
+  auth_user_id: string | null;
   webhook_url: string | null;
   webhook_secret: string | null;
   credits_balance: number;
@@ -16,6 +17,11 @@ export interface Builder {
 export const BuilderModel = {
   async findById(id: string): Promise<Builder | null> {
     const [row] = await sql<Builder[]>`SELECT * FROM builders WHERE id = ${id}`;
+    return row ?? null;
+  },
+
+  async findByAuthUserId(authUserId: string): Promise<Builder | null> {
+    const [row] = await sql<Builder[]>`SELECT * FROM builders WHERE auth_user_id = ${authUserId}`;
     return row ?? null;
   },
 

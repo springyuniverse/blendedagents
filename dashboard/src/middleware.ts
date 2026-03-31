@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
 const PUBLIC_PATHS = ['/login'];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths and static assets
@@ -14,14 +15,51 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for session cookie (set by the backend after Google OAuth)
-  const sessionCookie = request.cookies.get('sessionId') || request.cookies.get('connect.sid');
-  if (!sessionCookie?.value) {
+  // Create a Supabase client using request/response cookies
+  let response = NextResponse.next({
+    request: { headers: request.headers },
+  });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          for (const { name, value, options } of cookiesToSet) {
+            request.cookies.set(name, value);
+            response = NextResponse.next({
+              request: { headers: request.headers },
+            });
+            response.cookies.set(name, value, options);
+          }
+        },
+      },
+    },
+  );
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  // Inject Supabase access token for proxied API requests
+  if (pathname.startsWith('/api/v1')) {
+    const headers = new Headers(request.headers);
+    headers.set('Authorization', `Bearer ${session.access_token}`);
+    response = NextResponse.next({ request: { headers } });
+    // Re-set cookies on the new response
+    for (const cookie of request.cookies.getAll()) {
+      response.cookies.set(cookie.name, cookie.value);
+    }
+  }
+
+  return response;
 }
 
 export const config = {

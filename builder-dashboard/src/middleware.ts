@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
-const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password', '/api/auth'];
+const PUBLIC_PATHS = ['/login', '/forgot-password'];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths and static assets
@@ -14,12 +15,35 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for JWT cookie (new flow) or legacy API key cookie
-  const token = request.cookies.get('ba_token');
-  const legacyApiKey = request.cookies.get('ba_api_key');
-  const authValue = token?.value || legacyApiKey?.value;
+  // Create a Supabase client using request/response cookies
+  let response = NextResponse.next({
+    request: { headers: request.headers },
+  });
 
-  if (!authValue) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          for (const { name, value, options } of cookiesToSet) {
+            request.cookies.set(name, value);
+            response = NextResponse.next({
+              request: { headers: request.headers },
+            });
+            response.cookies.set(name, value, options);
+          }
+        },
+      },
+    },
+  );
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
@@ -28,11 +52,15 @@ export function middleware(request: NextRequest) {
   // Inject Authorization header for proxied API requests
   if (pathname.startsWith('/api/v1')) {
     const headers = new Headers(request.headers);
-    headers.set('Authorization', `Bearer ${authValue}`);
-    return NextResponse.next({ request: { headers } });
+    headers.set('Authorization', `Bearer ${session.access_token}`);
+    response = NextResponse.next({ request: { headers } });
+    // Re-set cookies on the new response
+    for (const cookie of request.cookies.getAll()) {
+      response.cookies.set(cookie.name, cookie.value);
+    }
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
