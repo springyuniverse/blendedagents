@@ -1,6 +1,7 @@
 import sql from '../lib/db.js';
 import { hashApiKey, generateApiKey } from '../lib/api-key.js';
 import type { Builder } from '../models/builder.js';
+import type { Tester } from '../models/tester.js';
 
 // Simple in-memory LRU cache for API key lookups
 const cache = new Map<string, { builder: Builder; cachedAt: number }>();
@@ -53,6 +54,81 @@ export const AuthService = {
       UPDATE api_keys SET revoked_at = now()
       WHERE id = ${keyId} AND builder_id = ${builderId}
     `;
+  },
+
+  /**
+   * Find or create a builder by Supabase auth user ID.
+   * Called on first Supabase login to link or create the builder record.
+   */
+  async findOrCreateBuilder(authUserId: string, email: string, displayName: string): Promise<Builder> {
+    // First, try to find by auth_user_id
+    const [existing] = await sql<Builder[]>`
+      SELECT * FROM builders WHERE auth_user_id = ${authUserId}
+    `;
+    if (existing) return existing;
+
+    // Try to find by email and link the auth_user_id
+    const [byEmail] = await sql<Builder[]>`
+      SELECT * FROM builders WHERE email = ${email} AND auth_user_id IS NULL
+    `;
+    if (byEmail) {
+      const [updated] = await sql<Builder[]>`
+        UPDATE builders SET auth_user_id = ${authUserId}
+        WHERE id = ${byEmail.id}
+        RETURNING *
+      `;
+      return updated;
+    }
+
+    // Create a new builder
+    const [created] = await sql<Builder[]>`
+      INSERT INTO builders (display_name, email, auth_user_id, plan_tier)
+      VALUES (${displayName}, ${email}, ${authUserId}, 'starter')
+      RETURNING *
+    `;
+
+    // Create initial credit balance
+    await sql`
+      INSERT INTO credit_balances (builder_id, available, reserved)
+      VALUES (${created.id}, 0, 0)
+      ON CONFLICT (builder_id) DO NOTHING
+    `;
+
+    return created;
+  },
+
+  /**
+   * Find or create a tester by Supabase auth user ID.
+   * Called on first Supabase login to link or create the tester record.
+   */
+  async findOrCreateTester(authUserId: string, email: string, displayName: string): Promise<Tester> {
+    // First, try to find by auth_user_id
+    const [existing] = await sql<Tester[]>`
+      SELECT * FROM testers WHERE auth_user_id = ${authUserId}
+    `;
+    if (existing) return existing;
+
+    // Try to find by email and link the auth_user_id
+    const [byEmail] = await sql<Tester[]>`
+      SELECT * FROM testers WHERE email = ${email} AND auth_user_id IS NULL
+    `;
+    if (byEmail) {
+      const [updated] = await sql<Tester[]>`
+        UPDATE testers SET auth_user_id = ${authUserId}
+        WHERE id = ${byEmail.id}
+        RETURNING *
+      `;
+      return updated;
+    }
+
+    // Create a new tester
+    const [created] = await sql<Tester[]>`
+      INSERT INTO testers (display_name, email, auth_user_id, region)
+      VALUES (${displayName}, ${email}, ${authUserId}, 'us')
+      RETURNING *
+    `;
+
+    return created;
   },
 
   clearCache() {

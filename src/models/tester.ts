@@ -4,6 +4,7 @@ export interface Tester {
   id: string;
   display_name: string;
   email: string;
+  auth_user_id: string | null;
   avatar_url: string | null;
   skills: string[];
   languages: string[];
@@ -23,6 +24,11 @@ export interface Tester {
 export const TesterModel = {
   async findById(id: string): Promise<Tester | null> {
     const [row] = await sql<Tester[]>`SELECT * FROM testers WHERE id = ${id}`;
+    return row ?? null;
+  },
+
+  async findByAuthUserId(authUserId: string): Promise<Tester | null> {
+    const [row] = await sql<Tester[]>`SELECT * FROM testers WHERE auth_user_id = ${authUserId}`;
     return row ?? null;
   },
 

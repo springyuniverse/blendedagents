@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { useState } from 'react';
 import { getMe } from '@/lib/api';
 import { CreditBalance } from '@/components/CreditBalance';
+import { createClient } from '@/lib/supabase';
 
 function NavIcon({ d, active }: { d: string; active: boolean }) {
   return (
@@ -60,7 +61,8 @@ function Sidebar() {
   if (isLoginPage) return null;
 
   const handleLogout = async () => {
-    await fetch('/api/auth', { method: 'DELETE' });
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push('/login');
   };
 

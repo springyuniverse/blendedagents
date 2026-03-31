@@ -13,7 +13,6 @@ import { templatesRoutes } from './api/templates.routes.js';
 import { PayoutService } from './services/payout.service.js';
 import { testerRoutes } from './api/tester.routes.js';
 import { webhookRoutes } from './api/webhook.routes.js';
-import { builderAuthRoutes } from './api/builder-auth.routes.js';
 import { WebhookService, WEBHOOK_JOB } from './services/webhook.service.js';
 import { ApiError } from './lib/errors.js';
 
@@ -53,7 +52,7 @@ export function buildApp() {
     });
   });
 
-  // Cookie support (required by OAuth and session plugins)
+  // Cookie support (needed for CORS credentials)
   app.register(cookie, {
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
   });
@@ -83,7 +82,6 @@ export function buildApp() {
   // Register route plugins
   app.register(healthRoutes);
   app.register(authRoutes, { prefix: '/auth' });
-  app.register(builderAuthRoutes, { prefix: '/auth/builder' });
   app.register(builderApiRoutes, { prefix: '/api/v1' });
   app.register(creditsRoutes, { prefix: '/api/v1/credits' });
   app.register(stripeWebhookRoutes, { prefix: '/webhooks' });

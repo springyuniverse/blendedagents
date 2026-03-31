@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService } from '../services/auth.service.js';
-import { BuilderAuthService } from '../services/builder-auth.service.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import { Errors } from '../lib/errors.js';
 import sql from '../lib/db.js';
 import type { Builder } from '../models/builder.js';
@@ -32,13 +32,20 @@ export async function builderAuthPlugin(app: FastifyInstance) {
         throw Errors.unauthorized('Invalid or revoked API key');
       }
     } else {
-      // JWT flow (new dashboard flow)
-      const payload = BuilderAuthService.verifyToken(token);
-      if (!payload) {
+      // Supabase JWT flow (dashboard sessions)
+      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+      if (error || !user) {
         throw Errors.unauthorized('Invalid or expired token');
       }
 
-      builder = await BuilderAuthService.findById(payload.builderId);
+      // Look up builder by Supabase auth user ID
+      builder = await AuthService.findOrCreateBuilder(
+        user.id,
+        user.email || '',
+        user.user_metadata?.display_name || user.email?.split('@')[0] || 'Builder',
+      );
+
       if (!builder) {
         throw Errors.unauthorized('Builder not found');
       }
