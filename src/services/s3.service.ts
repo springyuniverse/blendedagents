@@ -8,6 +8,12 @@ const s3 = new S3Client({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
+  // AWS SDK v3 (>=3.729) injects x-amz-checksum-crc32 into presigned PUT URLs
+  // by default. Browsers can't produce that header, so the signature fails
+  // before S3 even looks at the payload. Keep checksums opt-in so browser
+  // uploads via PUT just work.
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
 });
 
 const BUCKET = process.env.S3_BUCKET || 'blendedagents-uploads';
@@ -30,7 +36,7 @@ export const S3Service = {
     return getSignedUrl(s3, command, { expiresIn });
   },
 
-  generateKey(type: 'screenshot' | 'recording', testCaseId: string, suffix: string): string {
+  generateKey(type: 'screenshot' | 'recording' | 'annotation', testCaseId: string, suffix: string): string {
     const date = new Date().toISOString().split('T')[0];
     return `${type}s/${date}/${testCaseId}/${suffix}`;
   },

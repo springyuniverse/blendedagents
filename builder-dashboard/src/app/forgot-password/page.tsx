@@ -34,63 +34,48 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 !ml-0" style={{ marginLeft: 0 }}>
+    <div className="min-h-screen flex items-center justify-center bg-bg" style={{ marginLeft: 0 }}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-xl font-semibold text-gray-900">BlendedAgents</h1>
-          <p className="text-sm text-gray-500 mt-1">Builder Dashboard</p>
+          <h1 className="text-2xl font-bold tracking-tight text-text-primary">
+            BlendedAgents
+          </h1>
+          <p className="text-sm text-text-muted mt-1">Reset your password</p>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-          <h2 className="text-base font-medium text-gray-900 mb-4">Reset Password</h2>
-
+        <div className="bg-surface border border-border rounded-lg p-6 shadow-soft">
           {submitted ? (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-md px-3 py-2">
-                <p className="text-sm text-green-800">
-                  Check your email for reset instructions. If an account exists with that email, you will receive a password reset link.
-                </p>
+              <div className="text-[13px] text-accent-review bg-accent-review/10 border border-accent-review/20 rounded-lg px-3 py-2">
+                Check your email for reset instructions. If an account exists with that email, you will receive a password reset link.
               </div>
-              <Link
-                href="/login"
-                className="block w-full text-center py-2 px-4 bg-gray-900 text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors"
-              >
+              <Link href="/login"
+                className="block w-full text-center py-2.5 px-4 bg-accent-flow text-white text-sm font-semibold rounded-lg hover:bg-accent-flow/90  transition-all duration-200">
                 Back to Sign In
               </Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                  placeholder="you@company.com"
-                  required
-                />
+                <label htmlFor="email" className="block text-xs font-semibold text-text-primary mb-1">Email address</label>
+                <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-flow/50 focus:border-accent-flow/50 transition-all"
+                  placeholder="you@company.com" required />
               </div>
 
               {error && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                <div className="text-[13px] text-accent-danger bg-accent-danger/10 border border-accent-danger/20 rounded-lg px-3 py-2">
                   {error}
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading || !email}
-                className="w-full py-2 px-4 bg-gray-900 text-white text-sm font-medium rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
+              <button type="submit" disabled={loading || !email}
+                className="w-full py-2.5 px-4 bg-accent-flow text-white text-sm font-semibold rounded-lg hover:bg-accent-flow/90  disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
                 {loading ? 'Sending...' : 'Send Reset Link'}
               </button>
 
               <div className="text-center">
-                <Link href="/login" className="text-xs text-gray-500 hover:text-gray-700">
+                <Link href="/login" className="text-xs text-text-muted hover:text-text-secondary">
                   Back to Sign In
                 </Link>
               </div>

@@ -13,8 +13,10 @@ import { templatesRoutes } from './api/templates.routes.js';
 import { PayoutService } from './services/payout.service.js';
 import { testerRoutes } from './api/tester.routes.js';
 import { webhookRoutes } from './api/webhook.routes.js';
+import { adminRoutes } from './api/admin.routes.js';
 import { WebhookService, WEBHOOK_JOB } from './services/webhook.service.js';
 import { ApiError } from './lib/errors.js';
+import sql from './lib/db.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -89,6 +91,7 @@ export function buildApp() {
   app.register(templatesRoutes, { prefix: '/api/v1/templates' });
   app.register(testerRoutes, { prefix: '/api/v1/tester' });
   app.register(webhookRoutes, { prefix: '/api/v1' });
+  app.register(adminRoutes, { prefix: '/api/v1/admin' });
 
   return app;
 }
@@ -97,8 +100,66 @@ async function startWorkers(logger: { info: (msg: string) => void; error: (err: 
   try {
     const boss = await getJobManager();
 
-    // Payout scheduler
+    // Log pg-boss errors instead of crashing
+    boss.on('error', (err) => logger.error(err, 'pg-boss error'));
+
+    // Create queues (required in pg-boss v12+)
     const PAYOUT_JOB = 'weekly-payout-aggregation';
+    await boss.createQueue(PAYOUT_JOB);
+    await boss.createQueue(WEBHOOK_JOB);
+    await boss.createQueue('assign-tester');
+    await boss.createQueue('select-tester');
+    await boss.createQueue('assignment-expiry');
+    await boss.createQueue('acceptance-timeout');
+
+    // Select tester from requests after the window closes
+    await boss.work<{ testCaseId: string }>('select-tester', async (jobs) => {
+      for (const job of jobs) {
+        const { testCaseId } = job.data;
+        logger.info(`Selecting tester for test case ${testCaseId}`);
+
+        // Check task is still queued
+        const [task] = await sql`SELECT id, status FROM test_cases WHERE id = ${testCaseId}`;
+        if (!task || task.status !== 'queued') continue;
+
+        // Get pending requests, pick the best tester (for now: most completed tasks, then earliest request)
+        const [bestRequest] = await sql`
+          SELECT tr.id AS request_id, tr.tester_id, t.tasks_completed, t.avg_completion_minutes
+          FROM task_requests tr
+          JOIN testers t ON t.id = tr.tester_id
+          WHERE tr.test_case_id = ${testCaseId}
+            AND tr.status = 'pending'
+            AND t.is_active = true
+          ORDER BY t.tasks_completed DESC, t.avg_completion_minutes ASC, tr.created_at ASC
+          LIMIT 1
+        `;
+
+        if (!bestRequest) {
+          logger.info(`No requests for test case ${testCaseId}, will retry`);
+          // Re-check after the platform-defined selection window
+          const [cfg] = await sql<{ value: string }[]>`
+            SELECT value::text FROM platform_config WHERE key = 'selection_window_minutes'
+          `;
+          const retrySeconds = (cfg ? parseInt(cfg.value, 10) : 30) * 60;
+          await boss.send('select-tester', { testCaseId }, {
+            startAfter: retrySeconds,
+            singletonKey: `select:${testCaseId}`,
+          });
+          continue;
+        }
+
+        // Accept the winner, reject others, assign the task
+        await sql.begin(async (tx) => {
+          await tx`UPDATE task_requests SET status = 'accepted' WHERE id = ${bestRequest.request_id}`;
+          await tx`UPDATE task_requests SET status = 'rejected' WHERE test_case_id = ${testCaseId} AND id != ${bestRequest.request_id} AND status = 'pending'`;
+          await tx`UPDATE test_cases SET status = 'assigned', assigned_tester_id = ${bestRequest.tester_id}, assigned_at = now() WHERE id = ${testCaseId}`;
+        });
+
+        logger.info(`Assigned test case ${testCaseId} to tester ${bestRequest.tester_id}`);
+      }
+    });
+
+    // Payout scheduler
     await boss.work(PAYOUT_JOB, async () => {
       logger.info('Running weekly payout aggregation...');
       const count = await PayoutService.runWeeklyAggregation();

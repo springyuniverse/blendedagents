@@ -1,70 +1,57 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { builderAuthPlugin } from '../middleware/builder-auth.js';
 import { CreditBalanceModel } from '../models/credit-balance.js';
 import { CreditRateConfigModel } from '../models/credit-rate-config.js';
-import { CreditPackModel } from '../models/credit-pack.js';
 import { TransactionModel, VALID_TRANSACTION_TYPES, type TransactionType } from '../models/transaction.js';
-import { StripeService } from '../services/stripe.service.js';
-import { ApiError, Errors, sendError } from '../lib/errors.js';
-
-// Stub for auth middleware from 001-foundation-auth
-// This will be replaced with the real auth middleware when integrated
-function getAuthenticatedBuilderId(request: FastifyRequest): string {
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ba_sk_')) {
-    throw Errors.unauthorized('Missing or invalid API key');
-  }
-  // In production, this looks up the builder by API key
-  // For now, return a placeholder that will be replaced by 001-foundation-auth integration
-  return (request as unknown as { builderId: string }).builderId ?? '';
-}
+import { StripeService, calculateCreditsForAmount } from '../services/stripe.service.js';
+import { Errors } from '../lib/errors.js';
 
 export async function creditsRoutes(app: FastifyInstance) {
-  // Auth hook for all routes in this plugin
-  app.addHook('preHandler', async (request, reply) => {
-    try {
-      const builderId = getAuthenticatedBuilderId(request);
-      (request as unknown as { builderId: string }).builderId = builderId;
-    } catch (err) {
-      if (err instanceof ApiError) {
-        sendError(reply, err);
-        return;
-      }
-      throw err;
-    }
-  });
+  await builderAuthPlugin(app);
 
   // GET /api/v1/credits/balance
-  app.get('/balance', async (request: FastifyRequest, reply: FastifyReply) => {
-    const builderId = (request as unknown as { builderId: string }).builderId;
+  app.get('/balance', async (request: FastifyRequest) => {
+    const builder = request.builder!;
 
-    const balance = await CreditBalanceModel.getByBuilderId(builderId);
+    const balance = await CreditBalanceModel.getByBuilderId(builder.id);
     if (!balance) {
-      throw Errors.notFound('Credit balance');
+      return {
+        available_credits: 0,
+        reserved_credits: 0,
+        total_credits_used: 0,
+        per_credit_rate: 0,
+        per_credit_rate_cents: 0,
+      };
     }
 
-    const totalUsed = await CreditBalanceModel.getTotalUsed(builderId);
+    const totalUsed = await CreditBalanceModel.getTotalUsed(builder.id);
     const rate = await CreditRateConfigModel.getCurrentRate();
 
     return {
       available_credits: balance.available_credits,
       reserved_credits: balance.reserved_credits,
       total_credits_used: totalUsed,
-      per_credit_rate: rate.per_credit_rate_cents / 100,
-      per_credit_rate_cents: rate.per_credit_rate_cents,
+      per_credit_rate: rate ? rate.per_credit_rate_cents / 100 : 0,
+      per_credit_rate_cents: rate?.per_credit_rate_cents ?? 0,
     };
   });
 
-  // GET /api/v1/credits/packs
-  app.get('/packs', async () => {
-    const packs = await CreditPackModel.listActive();
+  // GET /api/v1/credits/estimate?amount_cents=2500
+  app.get('/estimate', async (
+    request: FastifyRequest<{ Querystring: { amount_cents?: string } }>,
+  ) => {
+    const amountCents = parseInt(request.query.amount_cents || '1000', 10);
+    if (isNaN(amountCents) || amountCents < 0) {
+      throw Errors.badRequest('amount_cents must be a positive integer');
+    }
+    const result = calculateCreditsForAmount(amountCents);
     return {
-      packs: packs.map((p) => ({
-        id: p.id,
-        name: p.name,
-        credit_amount: p.credit_amount,
-        price: p.price_cents / 100,
-        price_cents: p.price_cents,
-      })),
+      amount_cents: amountCents,
+      amount: amountCents / 100,
+      credits: result.credits,
+      per_credit_cents: result.perCreditCents,
+      per_credit: result.perCreditCents / 100,
+      discount_label: result.discountLabel,
     };
   });
 
@@ -73,26 +60,18 @@ export async function creditsRoutes(app: FastifyInstance) {
     schema: {
       body: {
         type: 'object',
-        required: ['pack_id'],
+        required: ['amount_cents'],
         properties: {
-          pack_id: { type: 'string', format: 'uuid' },
+          amount_cents: { type: 'integer', minimum: 1000, maximum: 100000 },
         },
         additionalProperties: false,
       },
     },
-  }, async (request: FastifyRequest<{ Body: { pack_id: string } }>, reply: FastifyReply) => {
-    const builderId = (request as unknown as { builderId: string }).builderId;
-    const { pack_id } = request.body ?? {};
+  }, async (request: FastifyRequest<{ Body: { amount_cents: number } }>) => {
+    const builder = request.builder!;
+    const { amount_cents } = request.body;
 
-    if (!pack_id) {
-      throw Errors.badRequest('pack_id is required');
-    }
-
-    // Get builder email for Stripe customer creation
-    // Placeholder — will integrate with 001-foundation-auth builder lookup
-    const builderEmail = `builder-${builderId}@blendedagents.com`;
-
-    const result = await StripeService.createCheckoutSession(builderId, builderEmail, pack_id);
+    const result = await StripeService.createCheckoutSession(builder.id, builder.email, amount_cents);
     return result;
   });
 
@@ -102,10 +81,9 @@ export async function creditsRoutes(app: FastifyInstance) {
       Querystring: { type?: string; cursor?: string; limit?: string };
     }>,
   ) => {
-    const builderId = (request as unknown as { builderId: string }).builderId;
+    const builder = request.builder!;
     const { type, cursor, limit: limitStr } = request.query;
 
-    // Validate type filter
     if (type && !VALID_TRANSACTION_TYPES.includes(type as TransactionType)) {
       throw Errors.invalidFilter('type', type, VALID_TRANSACTION_TYPES);
     }
@@ -115,7 +93,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       throw Errors.badRequest('limit must be between 1 and 100', { field: 'limit', value: limitStr });
     }
 
-    const page = await TransactionModel.listByBuilder(builderId, {
+    const page = await TransactionModel.listByBuilder(builder.id, {
       type: type as TransactionType | undefined,
       cursor,
       limit,

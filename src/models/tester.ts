@@ -9,13 +9,16 @@ export interface Tester {
   skills: string[];
   languages: string[];
   region: string;
+  devices: string[];
   is_active: boolean;
   is_available: boolean;
+  onboarded: boolean;
   current_task_id: string | null;
   tasks_total: number;
   tasks_completed: number;
   avg_completion_minutes: number;
   earnings_cents: number;
+  max_invites: number;
   timezone: string | null;
   created_at: Date;
   updated_at: Date;
@@ -60,7 +63,7 @@ export const TesterModel = {
     return row;
   },
 
-  async update(id: string, data: Partial<Pick<Tester, 'display_name' | 'avatar_url' | 'skills' | 'languages' | 'region' | 'is_active' | 'is_available' | 'current_task_id' | 'timezone'>>): Promise<Tester> {
+  async update(id: string, data: Partial<Pick<Tester, 'display_name' | 'avatar_url' | 'skills' | 'languages' | 'devices' | 'region' | 'is_active' | 'is_available' | 'onboarded' | 'current_task_id' | 'timezone' | 'max_invites'>>): Promise<Tester> {
     const [row] = await sql<Tester[]>`
       UPDATE testers SET ${sql(data as Record<string, unknown>)}
       WHERE id = ${id}

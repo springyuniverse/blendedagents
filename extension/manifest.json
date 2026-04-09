@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "BlendedAgents Annotator",
+  "version": "1.0.0",
+  "description": "Draw annotations on any website while testing. Screenshots include your annotations automatically.",
+  "permissions": [
+    "activeTab"
+  ],
+  "action": {
+    "default_title": "Toggle Annotations (Alt+A)"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Ctrl+Shift+P", "mac": "Command+Shift+P" },
+      "description": "Toggle annotation mode"
+    }
+  },
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:4002/*",
+      "https://blendedagents.com/*",
+      "https://www.blendedagents.com/*"
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const PUBLIC_PATHS = ['/login', '/forgot-password'];
+const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,13 +18,17 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  // Dev mode: Supabase not configured — use dev-session cookie
   if (!supabaseUrl || !supabaseAnonKey) {
+    const devSession = request.cookies.get('dev-session')?.value;
+    if (devSession) {
+      return NextResponse.next();
+    }
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('error', 'not_configured');
     return NextResponse.redirect(loginUrl);
   }
 
-  // Create a Supabase client using request/response cookies
+  // Production mode: Supabase auth
   let response = NextResponse.next({
     request: { headers: request.headers },
   });
@@ -52,21 +56,24 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession();
 
-  if (!session) {
+  // For API proxy routes, inject auth token and strip cookies (backend only needs Bearer token)
+  if (pathname.startsWith('/api/')) {
+    if (session?.access_token) {
+      const headers = new Headers(request.headers);
+      headers.set('Authorization', `Bearer ${session.access_token}`);
+      headers.delete('cookie');
+      return NextResponse.next({ request: { headers } });
+    }
+    return NextResponse.next();
+  }
+
+  // For pages, require auth
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // Inject Authorization header for proxied API requests
-  if (pathname.startsWith('/api/v1')) {
-    const headers = new Headers(request.headers);
-    headers.set('Authorization', `Bearer ${session.access_token}`);
-    response = NextResponse.next({ request: { headers } });
-    // Re-set cookies on the new response
-    for (const cookie of request.cookies.getAll()) {
-      response.cookies.set(cookie.name, cookie.value);
-    }
   }
 
   return response;

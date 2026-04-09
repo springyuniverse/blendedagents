@@ -2,6 +2,9 @@ import sql from '../lib/db.js';
 import { hashApiKey, generateApiKey } from '../lib/api-key.js';
 import type { Builder } from '../models/builder.js';
 import type { Tester } from '../models/tester.js';
+import { TesterInviteModel } from '../models/tester-invite.js';
+import { PlatformSettingsModel } from '../models/platform-settings.js';
+import { Errors } from '../lib/errors.js';
 
 // Simple in-memory LRU cache for API key lookups
 const cache = new Map<string, { builder: Builder; cachedAt: number }>();
@@ -100,8 +103,14 @@ export const AuthService = {
   /**
    * Find or create a tester by Supabase auth user ID.
    * Called on first Supabase login to link or create the tester record.
+   * New testers must provide a valid invite code in metadata.
    */
-  async findOrCreateTester(authUserId: string, email: string, displayName: string): Promise<Tester> {
+  async findOrCreateTester(
+    authUserId: string,
+    email: string,
+    displayName: string,
+    metadata?: { invite_code?: string; region?: string },
+  ): Promise<Tester> {
     // First, try to find by auth_user_id
     const [existing] = await sql<Tester[]>`
       SELECT * FROM testers WHERE auth_user_id = ${authUserId}
@@ -121,12 +130,33 @@ export const AuthService = {
       return updated;
     }
 
-    // Create a new tester
+    // Check platform settings for invite requirement
+    const settings = await PlatformSettingsModel.get();
+    const inviteCode = metadata?.invite_code?.toUpperCase().trim();
+
+    if (settings.require_invite_code) {
+      if (!inviteCode) {
+        throw Errors.forbidden('A valid invite code is required to sign up');
+      }
+      const invite = await TesterInviteModel.findByCode(inviteCode);
+      if (!invite || invite.used_by_id) {
+        throw Errors.badRequest('Invalid or already used invite code');
+      }
+    }
+
+    const region = metadata?.region || 'us';
+
+    // Create a new tester with default invite allocation
     const [created] = await sql<Tester[]>`
-      INSERT INTO testers (display_name, email, auth_user_id, region)
-      VALUES (${displayName}, ${email}, ${authUserId}, 'us')
+      INSERT INTO testers (display_name, email, auth_user_id, region, max_invites)
+      VALUES (${displayName}, ${email}, ${authUserId}, ${region}, ${settings.default_max_invites})
       RETURNING *
     `;
+
+    // Redeem the invite code if one was provided
+    if (inviteCode) {
+      await TesterInviteModel.redeem(inviteCode, created.id);
+    }
 
     return created;
   },

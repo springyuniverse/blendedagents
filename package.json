@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "dev": "node --import tsx src/server.ts",
+    "dev": "node --env-file=.env --import tsx src/server.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

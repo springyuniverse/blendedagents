@@ -12,8 +12,9 @@ declare module 'fastify' {
 }
 
 export async function builderAuthPlugin(app: FastifyInstance) {
-  // Decorate request with builder property
-  app.decorateRequest('builder', null);
+  if (!app.hasRequestDecorator('builder')) {
+    app.decorateRequest('builder', null);
+  }
 
   app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
     const authHeader = request.headers.authorization;

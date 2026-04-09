@@ -6,8 +6,7 @@ import { WebhookService } from '../services/webhook.service.js';
 import { Errors } from '../lib/errors.js';
 
 export async function webhookRoutes(app: FastifyInstance) {
-  // All webhook config routes require builder auth
-  await app.register(builderAuthPlugin);
+  await builderAuthPlugin(app);
 
   // PUT /api/v1/webhook — set or update webhook configuration
   app.put('/webhook', {
@@ -46,13 +45,14 @@ export async function webhookRoutes(app: FastifyInstance) {
 
   // POST /api/v1/webhook/ping — send a test webhook
   app.post('/webhook/ping', async (request: FastifyRequest) => {
-    const builder = request.builder!;
+    // Re-fetch builder to get the latest webhook_url (auth middleware caches old data)
+    const fresh = await BuilderModel.findById(request.builder!.id);
 
-    if (!builder.webhook_url) {
+    if (!fresh?.webhook_url) {
       throw Errors.badRequest('No webhook URL configured. Set one with PUT /api/v1/webhook first.');
     }
 
-    const result = await WebhookService.sendPing(builder.id);
+    const result = await WebhookService.sendPing(fresh.id);
     return result;
   });
 

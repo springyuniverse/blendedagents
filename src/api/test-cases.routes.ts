@@ -7,39 +7,74 @@ import { Errors } from '../lib/errors.js';
 
 const VALID_STATUSES = ['queued', 'assigned', 'in_progress', 'completed', 'cancelled', 'expired'];
 
-const createTestCaseSchema = {
-  body: {
-    type: 'object',
-    required: ['title', 'description', 'staging_url', 'steps', 'expected_behavior'],
-    properties: {
-      title: { type: 'string', minLength: 1, maxLength: 255 },
-      description: { type: 'string', maxLength: 5000 },
-      staging_url: { type: 'string', format: 'uri' },
-      steps: {
-        type: 'array',
-        minItems: 1,
-        maxItems: 50,
-        items: {
-          type: 'object',
-          required: ['instruction'],
-          properties: {
-            instruction: { type: 'string', minLength: 1 },
-          },
+const createFlowTestSchema = {
+  type: 'object',
+  required: ['template_type', 'title', 'staging_url', 'steps', 'expected_behavior'],
+  properties: {
+    template_type: { type: 'string', const: 'flow_test' },
+    title: { type: 'string', minLength: 1, maxLength: 255 },
+    description: { type: 'string', maxLength: 5000 },
+    staging_url: { type: 'string', format: 'uri' },
+    steps: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 50,
+      items: {
+        type: 'object',
+        required: ['instruction'],
+        properties: {
+          instruction: { type: 'string', minLength: 1 },
+          expected_behavior: { type: 'string' },
         },
       },
-      expected_behavior: { type: 'string', minLength: 1, maxLength: 5000 },
-      credentials: { type: 'object' },
-      environment: { type: 'string' },
-      tags: { type: 'array', items: { type: 'string' } },
-      external_id: { type: 'string' },
-      callback_url: { type: 'string', format: 'uri' },
-      required_skills: { type: 'array', items: { type: 'string' } },
     },
-    additionalProperties: false,
+    expected_behavior: { type: 'string', minLength: 1, maxLength: 5000 },
+    credentials: { type: 'object' },
+    environment: { type: 'string' },
+    tags: { type: 'array', items: { type: 'string' } },
+    external_id: { type: 'string' },
+    callback_url: { type: 'string', format: 'uri' },
+    required_skills: { type: 'array', items: { type: 'string' } },
+  },
+  additionalProperties: false,
+} as const;
+
+const createReviewTestSchema = {
+  type: 'object',
+  required: ['template_type', 'title', 'staging_url', 'context', 'devices_to_check'],
+  properties: {
+    template_type: { type: 'string', const: 'review_test' },
+    title: { type: 'string', minLength: 1, maxLength: 255 },
+    description: { type: 'string', maxLength: 5000 },
+    staging_url: { type: 'string', format: 'uri' },
+    context: { type: 'string', minLength: 1, maxLength: 5000 },
+    devices_to_check: {
+      type: 'array',
+      minItems: 1,
+      items: { type: 'string', enum: ['desktop_chrome', 'desktop_firefox', 'desktop_safari', 'mobile_safari', 'mobile_android', 'tablet'] },
+    },
+    focus_areas: {
+      type: 'array',
+      items: { type: 'string', enum: ['layout', 'typography', 'forms', 'images', 'content', 'functionality'] },
+    },
+    ignore_areas: { type: 'string', maxLength: 2000 },
+    credentials: { type: 'object' },
+    environment: { type: 'string' },
+    tags: { type: 'array', items: { type: 'string' } },
+    external_id: { type: 'string' },
+    callback_url: { type: 'string', format: 'uri' },
+    required_skills: { type: 'array', items: { type: 'string' } },
+  },
+  additionalProperties: false,
+} as const;
+
+const createTestCaseSchema = {
+  body: {
+    oneOf: [createFlowTestSchema, createReviewTestSchema],
   },
 } as const;
 
-const submitResultsSchema = {
+const submitFlowResultsSchema = {
   body: {
     type: 'object',
     required: ['verdict', 'steps'],
@@ -68,21 +103,57 @@ const submitResultsSchema = {
   },
 } as const;
 
+const submitReviewResultsSchema = {
+  body: {
+    type: 'object',
+    required: ['verdict', 'findings'],
+    properties: {
+      verdict: { type: 'string', enum: ['issues_found', 'no_issues'] },
+      summary: { type: 'string' },
+      findings: {
+        type: 'array',
+        maxItems: 10,
+        items: {
+          type: 'object',
+          required: ['severity', 'category', 'description', 'device', 'location'],
+          properties: {
+            severity: { type: 'string', enum: ['critical', 'major', 'minor'] },
+            category: { type: 'string', enum: ['functionality', 'layout', 'content', 'typography', 'forms', 'images'] },
+            description: { type: 'string', minLength: 1 },
+            screenshot_url: { type: 'string', format: 'uri' },
+            device: { type: 'string', minLength: 1 },
+            location: { type: 'string', minLength: 1 },
+          },
+        },
+      },
+    },
+    additionalProperties: false,
+  },
+} as const;
+
 export async function testCasesRoutes(app: FastifyInstance) {
   // Builder-authenticated routes
   app.register(async (builderScope) => {
-    builderScope.register(builderAuthPlugin);
+    await builderAuthPlugin(builderScope);
 
     // POST /api/v1/test-cases — create test case
     builderScope.post('/', {
       schema: createTestCaseSchema,
     }, async (request: FastifyRequest<{
       Body: {
+        template_type: 'flow_test' | 'review_test';
         title: string;
-        description: string;
+        description?: string;
         staging_url: string;
-        steps: Record<string, unknown>[];
-        expected_behavior: string;
+        // Flow test fields
+        steps?: Record<string, unknown>[];
+        expected_behavior?: string;
+        // Review test fields
+        context?: string;
+        devices_to_check?: string[];
+        focus_areas?: string[];
+        ignore_areas?: string;
+        // Shared optional fields
         credentials?: Record<string, unknown>;
         environment?: string;
         tags?: string[];
@@ -96,37 +167,50 @@ export async function testCasesRoutes(app: FastifyInstance) {
       reply.status(201).send(result);
     });
 
-    // GET /api/v1/test-cases — list with status filter and cursor pagination
+    // GET /api/v1/test-cases — list with status filter, search, and pagination
     builderScope.get('/', async (request: FastifyRequest<{
-      Querystring: { status?: string; cursor?: string; limit?: string };
+      Querystring: { status?: string; search?: string; page?: string; cursor?: string; limit?: string };
     }>) => {
       const builder = request.builder!;
-      const { status, cursor, limit: limitStr } = request.query;
+      const { status, search, page: pageStr, cursor, limit: limitStr } = request.query;
 
       if (status && !VALID_STATUSES.includes(status)) {
         throw Errors.invalidFilter('status', status, VALID_STATUSES);
       }
 
       const limit = limitStr ? parseInt(limitStr, 10) : undefined;
-      if (limit !== undefined && (isNaN(limit) || limit < 1 || limit > 100)) {
-        throw Errors.badRequest('limit must be between 1 and 100', { field: 'limit', value: limitStr });
+      if (limit !== undefined && (isNaN(limit) || limit < 1 || limit > 500)) {
+        throw Errors.badRequest('limit must be between 1 and 500', { field: 'limit', value: limitStr });
       }
 
-      const page = await TestCaseService.list(builder.id, { status, cursor, limit });
+      const page = pageStr ? parseInt(pageStr, 10) : undefined;
+      if (page !== undefined && (isNaN(page) || page < 1)) {
+        throw Errors.badRequest('page must be a positive integer', { field: 'page', value: pageStr });
+      }
+
+      const result = await TestCaseService.list(builder.id, { status, search, page, cursor, limit });
 
       return {
-        test_cases: page.test_cases.map((tc) => ({
-          id: tc.id,
+        test_cases: result.test_cases.map((tc) => ({
+          id: tc.short_id,
           title: tc.title,
+          template_type: tc.template_type,
           status: tc.status,
-          credit_cost: tc.steps.length > 0 ? 2 + tc.steps.length : 0,
+          step_count: tc.steps?.length ?? 0,
+          credit_cost: tc.template_type === 'flow_test'
+            ? (tc.steps.length > 0 ? 2 + tc.steps.length : 0)
+            : 3,
           has_credentials: !!tc.credentials,
           environment: tc.environment,
           tags: tc.tags,
           created_at: tc.created_at.toISOString(),
         })),
-        next_cursor: page.next_cursor,
-        has_more: page.has_more,
+        total: result.total,
+        page: result.page,
+        per_page: result.per_page,
+        total_pages: result.total_pages,
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
       };
     });
 
@@ -137,12 +221,12 @@ export async function testCasesRoutes(app: FastifyInstance) {
       const builder = request.builder!;
       const testCase = await TestCaseService.getById(request.params.id, builder.id);
 
-      return {
-        id: testCase.id,
+      const base = {
+        id: testCase.short_id,
         title: testCase.title,
+        template_type: testCase.template_type,
         description: testCase.description,
         url: testCase.url,
-        steps: testCase.steps,
         status: testCase.status,
         has_credentials: !!testCase.credentials,
         environment: testCase.environment,
@@ -150,13 +234,29 @@ export async function testCasesRoutes(app: FastifyInstance) {
         required_skills: testCase.required_skills,
         external_id: testCase.external_id,
         callback_url: testCase.callback_url,
-        expected_behavior: testCase.expected_behavior,
         assigned_tester_id: testCase.assigned_tester_id,
         assigned_at: testCase.assigned_at?.toISOString() ?? null,
         completed_at: testCase.completed_at?.toISOString() ?? null,
         status_history: testCase.status_history,
         created_at: testCase.created_at.toISOString(),
         updated_at: testCase.updated_at.toISOString(),
+      };
+
+      if (testCase.template_type === 'flow_test') {
+        return {
+          ...base,
+          steps: testCase.steps,
+          expected_behavior: testCase.expected_behavior,
+        };
+      }
+
+      // review_test
+      return {
+        ...base,
+        context: testCase.context,
+        devices_to_check: testCase.devices_to_check,
+        focus_areas: testCase.focus_areas,
+        ignore_areas: testCase.ignore_areas,
       };
     });
 
@@ -179,7 +279,7 @@ export async function testCasesRoutes(app: FastifyInstance) {
 
   // Tester-authenticated routes
   app.register(async (testerScope) => {
-    testerScope.register(testerAuthPlugin);
+    await testerAuthPlugin(testerScope);
 
     // POST /api/v1/test-cases/:id/accept — tester accepts assignment
     testerScope.post('/:id/accept', async (request: FastifyRequest<{
@@ -190,9 +290,9 @@ export async function testCasesRoutes(app: FastifyInstance) {
       reply.status(200).send({ status: 'in_progress' });
     });
 
-    // POST /api/v1/test-cases/:id/results — tester submits results
+    // POST /api/v1/test-cases/:id/results — tester submits flow results
     testerScope.post('/:id/results', {
-      schema: submitResultsSchema,
+      schema: submitFlowResultsSchema,
     }, async (request: FastifyRequest<{
       Params: { id: string };
       Body: {
@@ -210,7 +310,30 @@ export async function testCasesRoutes(app: FastifyInstance) {
       };
     }>, reply: FastifyReply) => {
       const tester = request.tester!;
-      await AssignmentService.submitResults(request.params.id, tester.id, request.body);
+      await AssignmentService.submitFlowResults(request.params.id, tester.id, request.body);
+      reply.status(200).send({ status: 'completed' });
+    });
+
+    // POST /api/v1/test-cases/:id/findings — tester submits review findings
+    testerScope.post('/:id/findings', {
+      schema: submitReviewResultsSchema,
+    }, async (request: FastifyRequest<{
+      Params: { id: string };
+      Body: {
+        verdict: string;
+        summary?: string;
+        findings: Array<{
+          severity: string;
+          category: string;
+          description: string;
+          screenshot_url?: string;
+          device: string;
+          location: string;
+        }>;
+      };
+    }>, reply: FastifyReply) => {
+      const tester = request.tester!;
+      await AssignmentService.submitReviewResults(request.params.id, tester.id, request.body);
       reply.status(200).send({ status: 'completed' });
     });
   });

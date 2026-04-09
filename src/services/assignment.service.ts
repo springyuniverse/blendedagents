@@ -3,8 +3,10 @@ import { TestCaseModel } from '../models/test-case.js';
 import { TesterModel } from '../models/tester.js';
 import { StepResultModel } from '../models/step-result.js';
 import { TestResultModel } from '../models/test-result.js';
+import { FindingModel } from '../models/finding.js';
 import { RegionalRateModel } from '../models/regional-rate.js';
-import { CreditService, calculateCreditCost } from './credit.service.js';
+import { CreditService, calculateCreditCost, REVIEW_BASE_COST, calculateReviewBonusCredits } from './credit.service.js';
+import { gradeAssessment, type AssessmentConfig } from './sandbox-scoring.service.js';
 import { getJobManager } from '../lib/jobs.js';
 import { Errors } from '../lib/errors.js';
 import type { Tester } from '../models/tester.js';
@@ -142,8 +144,10 @@ export const AssignmentService = {
       `;
     }
 
-    // Refund credits
-    const creditCost = calculateCreditCost(testCase.steps.length);
+    // Refund credits — flow uses step-based cost, review uses base cost
+    const creditCost = testCase.template_type === 'review_test'
+      ? REVIEW_BASE_COST
+      : calculateCreditCost(testCase.steps.length);
     await CreditService.refundCredits(testCase.builder_id, testCaseId, creditCost);
   },
 
@@ -174,6 +178,7 @@ export const AssignmentService = {
       await tx`
         UPDATE test_cases
         SET status = 'in_progress',
+            started_at = NOW(),
             status_history = status_history || ${JSON.stringify({
               status: 'in_progress',
               at: new Date().toISOString(),
@@ -185,14 +190,15 @@ export const AssignmentService = {
   },
 
   /**
-   * Tester submits results: validate all steps have results,
+   * Tester submits flow test results: validate all steps have results,
    * create StepResults + TestResult, transition to 'completed',
    * and trigger CreditService.completeTest for the 3-transaction settlement.
    */
-  async submitResults(testCaseId: string, testerId: string, results: {
+  async submitFlowResults(testCaseId: string, testerId: string, results: {
     verdict: string;
     summary?: string;
     recording_url?: string;
+    annotations_url?: string;
     steps: Array<{
       step_index: number;
       status: string;
@@ -218,7 +224,6 @@ export const AssignmentService = {
       throw Errors.forbidden('This test case is not assigned to you');
     }
 
-    // Validate all steps have results
     if (results.steps.length !== testCase.steps.length) {
       throw Errors.badRequest(
         `Expected results for ${testCase.steps.length} steps, got ${results.steps.length}`,
@@ -226,7 +231,6 @@ export const AssignmentService = {
       );
     }
 
-    // Create step results
     for (const step of results.steps) {
       await StepResultModel.create({
         test_case_id: testCaseId,
@@ -240,7 +244,6 @@ export const AssignmentService = {
       });
     }
 
-    // Create test result
     const stepsPassed = results.steps.filter(s => s.status === 'passed').length;
     const stepsFailed = results.steps.filter(s => s.status === 'failed').length;
     const stepsBlocked = results.steps.filter(s => s.status === 'blocked').length;
@@ -255,28 +258,65 @@ export const AssignmentService = {
       steps_blocked: stepsBlocked,
       steps_total: testCase.steps.length,
       recording_url: results.recording_url,
+      annotations_url: results.annotations_url,
     });
 
-    // Transition to completed
     await TestCaseModel.updateStatus(testCaseId, 'completed');
-    await sql`
-      UPDATE test_cases SET completed_at = NOW() WHERE id = ${testCaseId}
-    `;
+    await sql`UPDATE test_cases SET completed_at = NOW() WHERE id = ${testCaseId}`;
 
-    // Free up the tester
+    // Record duration from started_at to now
+    if (testCase.started_at) {
+      const durationMinutes = Math.round((Date.now() - new Date(testCase.started_at).getTime()) / 60000 * 100) / 100;
+      await sql`UPDATE test_results SET duration_minutes = ${durationMinutes} WHERE test_case_id = ${testCaseId}`;
+    }
+
+    // ── Assessment auto-grading ──────────────────────────────────
+    if (testCase.type === 'onboarding_assessment' && testCase.assessment_config) {
+      const grade = gradeAssessment(
+        results.steps.map((s) => ({
+          step_index: s.step_index,
+          status: s.status,
+          severity: s.severity ?? null,
+          actual_behavior: s.actual_behavior ?? null,
+          notes: s.notes ?? null,
+        })),
+        testCase.assessment_config as unknown as AssessmentConfig,
+      );
+
+      // Store grade in assessment_config for retrieval
+      await sql`
+        UPDATE test_cases
+        SET assessment_config = assessment_config || ${sql.json({ grade } as never)}::jsonb
+        WHERE id = ${testCaseId}
+      `;
+
+      // Assessment complete — mark onboarded so account enters "in review".
+      // Admin reviews scores and decides whether to activate (is_active).
+      await TesterModel.update(testerId, { onboarded: true });
+
+      // Skip credit settlement for assessment tasks
+      await sql`
+        UPDATE testers
+        SET current_task_id = NULL
+        WHERE id = ${testerId}
+      `;
+      return;
+    }
+
     await sql`
       UPDATE testers
       SET current_task_id = NULL, is_available = true,
-          tasks_completed = tasks_completed + 1
+          tasks_completed = tasks_completed + 1,
+          avg_completion_minutes = COALESCE(
+            (SELECT AVG(duration_minutes) FROM test_results WHERE tester_id = ${testerId} AND duration_minutes IS NOT NULL), 0
+          )
       WHERE id = ${testerId}
     `;
 
-    // Look up tester region for payout rate
     const tester = await TesterModel.findById(testerId);
     const region = tester?.region ?? 'default';
     const regionalRate = await RegionalRateModel.getByRegion(region);
 
-    // Settle credits: charge + payout + commission (3 transactions)
     const creditCost = calculateCreditCost(testCase.steps.length);
     await CreditService.completeTest({
       builderId: testCase.builder_id,
@@ -290,5 +330,177 @@ export const AssignmentService = {
         steps_count: testCase.steps.length,
       },
     });
+  },
+
+  /**
+   * Tester submits review test results: create Findings + TestResult,
+   * transition to 'completed', and settle credits (base + bonus).
+   */
+  async submitReviewResults(testCaseId: string, testerId: string, results: {
+    verdict: string;
+    summary?: string;
+    findings: Array<{
+      severity: string;
+      category: string;
+      description: string;
+      screenshot_url?: string;
+      device: string;
+      location: string;
+    }>;
+  }): Promise<void> {
+    const testCase = await TestCaseModel.findById(testCaseId);
+    if (!testCase) {
+      throw Errors.notFound('Test case');
+    }
+
+    if (testCase.status !== 'in_progress') {
+      throw Errors.conflict('CANNOT_SUBMIT',
+        `Test case cannot receive results because it is ${testCase.status}`,
+        { current_status: testCase.status }
+      );
+    }
+
+    if (testCase.assigned_tester_id !== testerId) {
+      throw Errors.forbidden('This test case is not assigned to you');
+    }
+
+    // Create findings
+    for (const finding of results.findings) {
+      await FindingModel.create({
+        test_case_id: testCaseId,
+        tester_id: testerId,
+        severity: finding.severity,
+        category: finding.category,
+        description: finding.description,
+        screenshot_url: finding.screenshot_url,
+        device: finding.device,
+        location: finding.location,
+      });
+    }
+
+    // Count findings by severity for bonus calculation
+    const counts = { critical: 0, major: 0, minor: 0 };
+    for (const f of results.findings) {
+      counts[f.severity as keyof typeof counts]++;
+    }
+    const bonusCredits = calculateReviewBonusCredits(counts);
+    const totalCredits = REVIEW_BASE_COST + bonusCredits;
+
+    // Create test result
+    await TestResultModel.create({
+      test_case_id: testCaseId,
+      tester_id: testerId,
+      verdict: results.verdict,
+      summary: results.summary,
+      steps_passed: 0,
+      steps_failed: 0,
+      steps_blocked: 0,
+      steps_total: 0,
+    });
+
+    await TestCaseModel.updateStatus(testCaseId, 'completed');
+    await sql`UPDATE test_cases SET completed_at = NOW() WHERE id = ${testCaseId}`;
+
+    // Record duration from started_at to now
+    if (testCase.started_at) {
+      const durationMinutes = Math.round((Date.now() - new Date(testCase.started_at).getTime()) / 60000 * 100) / 100;
+      await sql`UPDATE test_results SET duration_minutes = ${durationMinutes} WHERE test_case_id = ${testCaseId}`;
+    }
+
+    await sql`
+      UPDATE testers
+      SET current_task_id = NULL, is_available = true,
+          tasks_completed = tasks_completed + 1,
+          avg_completion_minutes = COALESCE(
+            (SELECT AVG(duration_minutes) FROM test_results WHERE tester_id = ${testerId} AND duration_minutes IS NOT NULL), 0
+          )
+      WHERE id = ${testerId}
+    `;
+
+    const tester = await TesterModel.findById(testerId);
+    const region = tester?.region ?? 'default';
+    const regionalRate = await RegionalRateModel.getByRegion(region);
+
+    // For review tests: charge base + bonus, payout based on total credits
+    await CreditService.completeTest({
+      builderId: testCase.builder_id,
+      testerId,
+      testCaseId,
+      creditAmount: totalCredits,
+      stepsCount: results.findings.length,
+      lockedRate: {
+        base_pay_cents: regionalRate?.base_pay_cents ?? 100,
+        per_step_rate_cents: regionalRate?.per_step_rate_cents ?? 25,
+        steps_count: results.findings.length,
+      },
+    });
+  },
+
+  /**
+   * Admin reassigns a test case to a different tester.
+   * Clears existing results, resets status to 'assigned', frees old tester.
+   */
+  async adminReassign(testCaseId: string, newTesterId: string, reason?: string): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await sql.begin(async (tx: any) => {
+      const testCase = await TestCaseModel.getForUpdate(testCaseId, tx);
+      if (!testCase) throw Errors.notFound('Test case');
+
+      if (!['assigned', 'in_progress'].includes(testCase.status)) {
+        throw Errors.conflict('CANNOT_REASSIGN',
+          `Test case cannot be reassigned because it is ${testCase.status}`,
+          { current_status: testCase.status }
+        );
+      }
+
+      const oldTesterId = testCase.assigned_tester_id;
+
+      // Clear previous work
+      await tx`DELETE FROM step_results WHERE test_case_id = ${testCaseId}`;
+      await tx`DELETE FROM test_results WHERE test_case_id = ${testCaseId}`;
+      await tx`DELETE FROM findings WHERE test_case_id = ${testCaseId}`;
+
+      // Free old tester
+      if (oldTesterId) {
+        await tx`
+          UPDATE testers SET current_task_id = NULL, is_available = true
+          WHERE id = ${oldTesterId} AND current_task_id = ${testCaseId}
+        `;
+      }
+
+      // Assign new tester
+      await tx`
+        UPDATE test_cases
+        SET status = 'assigned',
+            assigned_tester_id = ${newTesterId},
+            assigned_at = NOW(),
+            started_at = NULL,
+            status_history = status_history || ${JSON.stringify({
+              status: 'reassigned',
+              at: new Date().toISOString(),
+              old_tester_id: oldTesterId,
+              new_tester_id: newTesterId,
+              reason: reason || null,
+            })}::jsonb
+        WHERE id = ${testCaseId}
+      `;
+
+      // Mark new tester as busy
+      await tx`
+        UPDATE testers SET current_task_id = ${testCaseId}, is_available = false
+        WHERE id = ${newTesterId}
+      `;
+    });
+
+    // Enqueue fresh acceptance-timeout
+    try {
+      const boss = await getJobManager();
+      await boss.send('acceptance-timeout', { testCaseId, testerId: newTesterId }, {
+        startAfter: 1800,
+        singletonKey: `acceptance-timeout:${testCaseId}`,
+      });
+    } catch {
+      // Non-fatal
+    }
   },
 };

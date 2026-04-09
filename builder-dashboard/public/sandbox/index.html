@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme Shop - Checkout</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    .checkout {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    /* ── Product ───────────────────────────── */
+    .product {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .product-img {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .product-info { flex: 1; }
+    .product-name { font-size: 15px; font-weight: 600; }
+    .product-price { font-size: 14px; color: #6366f1; font-weight: 600; margin-top: 2px; }
+    .product-desc { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+
+    .qty-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .qty-row label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .qty-select {
+      padding: 6px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      color: #1a1a2e;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .total-label { font-size: 14px; font-weight: 600; color: #374151; }
+
+    /* BUG 3: Total shows static $29.99 and never updates */
+    .total-value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+
+    /* ── Form ──────────────────────────────── */
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #1a1a2e;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
+
+    .form-group input::placeholder { color: #9ca3af; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ── Submit button ─────────────────────── */
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      /* BUG 1: Button text is clipped — max-width forces truncation */
+      max-width: 140px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .submit-btn:hover { background: #4f46e5; }
+
+    .secure-note {
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 12px;
+    }
+
+    .success-msg {
+      display: none;
+      text-align: center;
+      padding: 16px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 8px;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #065f46;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="checkout">
+    <div class="header">
+      <h1>Acme Shop</h1>
+      <p>Complete your order</p>
+    </div>
+
+    <!-- Product card -->
+    <div class="card">
+      <h2>Order Summary</h2>
+      <div class="product">
+        <div class="product-img">Widget<br>Pro</div>
+        <div class="product-info">
+          <div class="product-name">Widget Pro</div>
+          <div class="product-price">$29.99</div>
+          <div class="product-desc">Premium productivity tool</div>
+        </div>
+      </div>
+      <div class="qty-row">
+        <label for="qty">Quantity</label>
+        <select id="qty" class="qty-select">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <div class="total-row">
+        <span class="total-label">Total</span>
+        <!-- BUG 3: This value is hardcoded and never updates when quantity changes -->
+        <span class="total-value" id="total">$29.99</span>
+      </div>
+    </div>
+
+    <!-- Shipping form -->
+    <div class="card">
+      <h2>Shipping Information</h2>
+      <form id="checkout-form">
+        <div class="form-group">
+          <label for="name">Full Name</label>
+          <input type="text" id="name" placeholder="John Doe">
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" placeholder="john@example.com">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <!-- BUG 2: Phone field has type="text", accepts any characters -->
+            <label for="phone">Phone Number</label>
+            <input type="text" id="phone" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label for="zip">ZIP Code</label>
+            <input type="text" id="zip" placeholder="10001" maxlength="10">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="address">Street Address</label>
+          <input type="text" id="address" placeholder="123 Main St">
+        </div>
+
+        <div class="form-group">
+          <label for="city">City</label>
+          <input type="text" id="city" placeholder="New York">
+        </div>
+
+        <!-- BUG 1: Button text "Place Order — $29.99" is truncated due to max-width -->
+        <button type="submit" class="submit-btn">Place Order &mdash; $29.99</button>
+
+        <p class="secure-note">Secure checkout powered by Acme Payments</p>
+      </form>
+
+      <div class="success-msg" id="success">
+        Order placed successfully! Thank you for your purchase.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Quantity selector — deliberately does NOT update the total (BUG 3)
+    document.getElementById('qty').addEventListener('change', function() {
+      // Total should update to price * quantity, but it doesn't.
+      // The displayed total stays at $29.99 regardless of quantity selection.
+      console.log('Quantity changed to:', this.value);
+    });
+
+    // Form submission
+    document.getElementById('checkout-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      // BUG 4: No validation at all — empty form submits successfully with no error messages
+      document.getElementById('success').style.display = 'block';
+      this.style.display = 'none';
+    });
+  </script>
+</body>
+</html>

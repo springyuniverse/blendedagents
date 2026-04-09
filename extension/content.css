@@ -1,0 +1,191 @@
+/* ── BlendedAgents Annotator ─────────────────────────────────── */
+
+#ba-root {
+  all: initial;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+#ba-root * {
+  box-sizing: border-box;
+}
+
+/* Canvas covers the full viewport, only intercepts when drawing. */
+#ba-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  cursor: default;
+}
+
+#ba-canvas.ba-drawing {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+#ba-canvas.ba-erasing {
+  pointer-events: auto;
+  cursor: cell;
+}
+
+/* ── Toolbar ────────────────────────────────────────────────── */
+
+#ba-toolbar {
+  pointer-events: auto;
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: rgba(15, 15, 15, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#ba-toolbar.ba-dragging {
+  transform: none; /* disable centering while dragging */
+}
+
+/* Drag handle */
+.ba-drag {
+  cursor: grab;
+  padding: 4px 2px;
+  color: rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+}
+
+.ba-drag:active {
+  cursor: grabbing;
+}
+
+/* Tool buttons */
+.ba-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ba-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ba-btn.ba-active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.ba-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Toggle draw mode button */
+.ba-toggle {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  width: auto;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+
+.ba-toggle .ba-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.ba-toggle.ba-active .ba-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+/* Separator */
+.ba-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 2px;
+}
+
+/* Color swatches */
+.ba-color {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.ba-color:hover {
+  transform: scale(1.15);
+}
+
+.ba-color.ba-active {
+  border-color: white;
+  transform: scale(1.1);
+}
+
+/* Capture button */
+.ba-capture {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  width: auto;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.ba-capture:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: #93bbfd;
+}
+
+/* Toast notification */
+#ba-toast {
+  pointer-events: none;
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: rgba(15, 15, 15, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#ba-toast.ba-visible {
+  opacity: 1;
+}

@@ -42,6 +42,12 @@ export const StepResultModel = {
         ${data.severity ?? null}, ${data.actual_behavior ?? null},
         ${data.screenshot_url ?? null}, ${data.notes ?? null}
       )
+      ON CONFLICT (test_case_id, step_index) DO UPDATE SET
+        status = EXCLUDED.status,
+        severity = EXCLUDED.severity,
+        actual_behavior = EXCLUDED.actual_behavior,
+        screenshot_url = EXCLUDED.screenshot_url,
+        notes = EXCLUDED.notes
       RETURNING *
     `;
     return row;

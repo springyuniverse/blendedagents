@@ -6,11 +6,31 @@ import { calculatePayout, type PayoutInput } from './payout.service.js';
 import { calculateCommission } from './commission.service.js';
 import { Errors } from '../lib/errors.js';
 
-const BASE_COST = 2;
-const COST_PER_STEP = 1;
+// Flow test pricing: 3 base + 2 per step
+const FLOW_BASE_COST = 3;
+const FLOW_COST_PER_STEP = 2;
+
+// Review test pricing: 5 base + bonus per finding
+export const REVIEW_BASE_COST = 5;
+export const REVIEW_BONUS_PER_FINDING = { critical: 5, major: 3, minor: 1 } as const;
+export const REVIEW_MAX_FINDINGS_CAP = 10;
 
 export function calculateCreditCost(stepsCount: number): number {
-  return BASE_COST + stepsCount * COST_PER_STEP;
+  return FLOW_BASE_COST + stepsCount * FLOW_COST_PER_STEP;
+}
+
+export function calculateReviewBonusCredits(findings: { critical: number; major: number; minor: number }): number {
+  const totalFindings = findings.critical + findings.major + findings.minor;
+  if (totalFindings === 0) return 0;
+
+  // Cap at max findings — proportionally reduce if over cap
+  const scale = totalFindings > REVIEW_MAX_FINDINGS_CAP ? REVIEW_MAX_FINDINGS_CAP / totalFindings : 1;
+
+  return (
+    findings.critical * REVIEW_BONUS_PER_FINDING.critical * scale +
+    findings.major * REVIEW_BONUS_PER_FINDING.major * scale +
+    findings.minor * REVIEW_BONUS_PER_FINDING.minor * scale
+  );
 }
 
 export const CreditService = {
@@ -171,6 +191,13 @@ export const CreditService = {
         reference_id: testCaseId,
         idempotency_key: `commission:${testCaseId}`,
       }, tx);
+
+      // 6. Update tester earnings
+      await tx`
+        UPDATE testers
+        SET earnings_cents = earnings_cents + ${testerPayoutCents}
+        WHERE id = ${testerId}
+      `;
     });
   },
 

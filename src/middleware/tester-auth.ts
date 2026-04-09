@@ -12,7 +12,9 @@ declare module 'fastify' {
 }
 
 export async function testerAuthPlugin(app: FastifyInstance) {
-  app.decorateRequest('tester', null);
+  if (!app.hasRequestDecorator('tester')) {
+    app.decorateRequest('tester', null);
+  }
 
   app.addHook('preHandler', async (request: FastifyRequest) => {
     const authHeader = request.headers.authorization;
@@ -35,15 +37,11 @@ export async function testerAuthPlugin(app: FastifyInstance) {
       user.id,
       user.email || '',
       user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Tester',
+      { invite_code: user.user_metadata?.invite_code, region: user.user_metadata?.region },
     );
 
     if (!tester) {
       throw Errors.unauthorized('Tester not found');
-    }
-
-    // Verify tester is still active
-    if (!tester.is_active) {
-      throw Errors.unauthorized('Account has been deactivated');
     }
 
     request.tester = tester;

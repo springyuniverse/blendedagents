@@ -1,36 +1,57 @@
 import { stripe, verifyWebhookSignature } from '../lib/stripe.js';
-import { CreditPackModel } from '../models/credit-pack.js';
 import { CreditBalanceModel } from '../models/credit-balance.js';
 import { CreditService } from './credit.service.js';
 import { Errors } from '../lib/errors.js';
 import sql from '../lib/db.js';
 import type Stripe from 'stripe';
 
+// Volume discount tiers: spend more → get more credits per dollar
+const CREDIT_TIERS = [
+  { minCents: 20000, perCreditCents: 7, label: '$200+, 30% off' },   // $200+ → $0.07/credit
+  { minCents: 10000, perCreditCents: 8, label: '$100+, 20% off' },   // $100+ → $0.08/credit
+  { minCents: 5000,  perCreditCents: 9, label: '$50+, 10% off' },    // $50+  → $0.09/credit
+  { minCents: 0,     perCreditCents: 10, label: 'Base rate' },        // default → $0.10/credit
+];
+
+const MIN_AMOUNT_CENTS = 1000; // $10 minimum
+const MAX_AMOUNT_CENTS = 100000; // $1,000 maximum
+
+export function calculateCreditsForAmount(amountCents: number): { credits: number; perCreditCents: number; discountLabel: string } {
+  const tier = CREDIT_TIERS.find(t => amountCents >= t.minCents) ?? CREDIT_TIERS[CREDIT_TIERS.length - 1];
+  return {
+    credits: Math.floor(amountCents / tier.perCreditCents),
+    perCreditCents: tier.perCreditCents,
+    discountLabel: tier.label,
+  };
+}
+
 // Track pending purchases per builder to prevent concurrent top-ups
-// In production, this would use the database partial unique index
 const pendingSessions = new Map<string, string>();
 
 export const StripeService = {
   async createCheckoutSession(
     builderId: string,
     builderEmail: string,
-    packId: string,
-  ): Promise<{ checkout_url: string; session_id: string; pack: ReturnType<typeof formatPack> }> {
-    // Validate pack exists and is active
-    const pack = await CreditPackModel.findById(packId);
-    if (!pack) {
-      throw Errors.badRequest('Invalid or inactive credit pack', { pack_id: packId });
+    amountCents: number,
+  ): Promise<{ checkout_url: string; session_id: string; credits: number; amount_cents: number }> {
+    if (amountCents < MIN_AMOUNT_CENTS) {
+      throw Errors.badRequest(`Minimum top-up is $${MIN_AMOUNT_CENTS / 100}`, { min_cents: MIN_AMOUNT_CENTS });
     }
+    if (amountCents > MAX_AMOUNT_CENTS) {
+      throw Errors.badRequest(`Maximum top-up is $${MAX_AMOUNT_CENTS / 100}`, { max_cents: MAX_AMOUNT_CENTS });
+    }
+
+    const { credits } = calculateCreditsForAmount(amountCents);
 
     // Prevent concurrent purchases
     if (pendingSessions.has(builderId)) {
       throw Errors.conflict('PURCHASE_PENDING',
-        'You already have a pending credit purchase. Please complete or wait for it to expire before starting a new one.',
+        'You already have a pending credit purchase. Please complete or wait for it to expire.',
         { existing_session_id: pendingSessions.get(builderId) },
       );
     }
 
-    // Ensure Stripe customer exists (lazy creation)
+    // Ensure Stripe customer exists
     let stripeCustomerId = await getStripeCustomerId(builderId);
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
@@ -44,27 +65,33 @@ export const StripeService = {
       `;
     }
 
-    // Create Stripe Checkout Session
+    // Create Stripe Checkout Session with dynamic price
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: 'payment',
       line_items: [{
-        price: pack.stripe_price_id,
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${credits} BlendedAgents Credits`,
+            description: `Top up your testing credits`,
+          },
+          unit_amount: amountCents,
+        },
         quantity: 1,
       }],
       metadata: {
         builder_id: builderId,
-        pack_id: pack.id,
+        credits: String(credits),
+        amount_cents: String(amountCents),
       },
-      success_url: `${process.env.APP_URL || 'http://localhost:3000'}/credits?success=true`,
-      cancel_url: `${process.env.APP_URL || 'http://localhost:3000'}/credits?cancelled=true`,
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
+      success_url: `${process.env.APP_URL || 'http://localhost:3000'}/builder/credits?success=true`,
+      cancel_url: `${process.env.APP_URL || 'http://localhost:3000'}/builder/credits?cancelled=true`,
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
     });
 
-    // Track pending session
     pendingSessions.set(builderId, session.id);
 
-    // Auto-cleanup on expiry
     setTimeout(() => {
       if (pendingSessions.get(builderId) === session.id) {
         pendingSessions.delete(builderId);
@@ -74,7 +101,8 @@ export const StripeService = {
     return {
       checkout_url: session.url!,
       session_id: session.id,
-      pack: formatPack(pack),
+      credits,
+      amount_cents: amountCents,
     };
   },
 
@@ -94,7 +122,6 @@ export const StripeService = {
         return { processed: true, event_type: event.type };
 
       default:
-        // Unknown event type — ignore silently per contract
         return { processed: false, event_type: event.type };
     }
   },
@@ -102,9 +129,10 @@ export const StripeService = {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const builderId = session.metadata?.builder_id;
-  const packId = session.metadata?.pack_id;
+  const creditsStr = session.metadata?.credits;
+  const amountCentsStr = session.metadata?.amount_cents;
 
-  if (!builderId || !packId) {
+  if (!builderId || !creditsStr || !amountCentsStr) {
     console.warn('Webhook: checkout.session.completed missing metadata', {
       session_id: session.id,
       metadata: session.metadata,
@@ -112,41 +140,27 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // Verify builder exists
+  const credits = parseInt(creditsStr, 10);
+  const amountCents = parseInt(amountCentsStr, 10);
+
   const [builder] = await sql<{ id: string }[]>`
     SELECT id FROM builders WHERE id = ${builderId}
   `;
   if (!builder) {
-    console.warn('Webhook: unmatched builder_id, logging for audit', {
-      session_id: session.id,
-      builder_id: builderId,
-    });
+    console.warn('Webhook: unmatched builder_id', { session_id: session.id, builder_id: builderId });
     return;
   }
 
-  // Get pack details
-  const pack = await CreditPackModel.findById(packId);
-  if (!pack) {
-    console.warn('Webhook: unmatched pack_id', {
-      session_id: session.id,
-      pack_id: packId,
-    });
-    return;
-  }
-
-  // Ensure credit balance row exists
   await CreditBalanceModel.ensureExists(builderId);
 
-  // Grant credits (idempotent via stripe_session_id unique constraint)
   await CreditService.topupCredits(
     builderId,
-    pack.credit_amount,
-    pack.price_cents,
+    credits,
+    amountCents,
     session.id,
-    `Purchased ${pack.name} (${pack.credit_amount} credits)`,
+    `Added ${credits} credits ($${(amountCents / 100).toFixed(2)})`,
   );
 
-  // Clear pending session tracker
   pendingSessions.delete(builderId);
 }
 
@@ -162,14 +176,4 @@ async function getStripeCustomerId(builderId: string): Promise<string | null> {
     SELECT stripe_customer_id FROM builders WHERE id = ${builderId}
   `;
   return row?.stripe_customer_id ?? null;
-}
-
-function formatPack(pack: { id: string; name: string; credit_amount: number; price_cents: number }) {
-  return {
-    id: pack.id,
-    name: pack.name,
-    credit_amount: pack.credit_amount,
-    price: pack.price_cents / 100,
-    price_cents: pack.price_cents,
-  };
 }
