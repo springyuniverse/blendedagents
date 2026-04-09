@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
@@ -17,6 +17,18 @@ const REGIONS = [
 ];
 
 export default function TesterSignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-bg">
+        <div className="w-5 h-5 border-2 border-accent-review border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <TesterSignupForm />
+    </Suspense>
+  );
+}
+
+function TesterSignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [inviteRequired, setInviteRequired] = useState<boolean | null>(null);
