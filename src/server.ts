@@ -84,6 +84,7 @@ export function buildApp() {
   // Register route plugins
   app.register(healthRoutes);
   app.register(authRoutes, { prefix: '/auth' });
+  app.register(authRoutes, { prefix: '/api/v1/auth' });
   app.register(builderApiRoutes, { prefix: '/api/v1' });
   app.register(creditsRoutes, { prefix: '/api/v1/credits' });
   app.register(stripeWebhookRoutes, { prefix: '/webhooks' });

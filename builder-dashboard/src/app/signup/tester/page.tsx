@@ -48,7 +48,7 @@ function TesterSignupForm() {
     const code = searchParams.get('invite');
     if (code) setInviteCode(code.toUpperCase().trim());
 
-    fetch('/auth/signup-config')
+    fetch('/api/v1/auth/signup-config')
       .then(r => r.json())
       .then(data => {
         const required = data.require_invite_code !== false;
@@ -74,7 +74,7 @@ function TesterSignupForm() {
     }
     setInviteChecking(true);
     try {
-      const res = await fetch(`/auth/validate-invite?code=${encodeURIComponent(trimmed)}`);
+      const res = await fetch(`/api/v1/auth/validate-invite?code=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
       setInviteValid(data.valid === true);
     } catch {
