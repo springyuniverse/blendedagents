@@ -2,7 +2,7 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+# Install ALL dependencies (tsx is in devDeps but needed at runtime)
 COPY package.json package-lock.json* ./
 RUN npm ci
 
@@ -10,6 +10,7 @@ RUN npm ci
 COPY src/ ./src/
 COPY tsconfig.json ./
 
+ENV NODE_ENV=production
 EXPOSE 4000
 
 CMD ["node", "--import", "tsx", "src/server.ts"]
