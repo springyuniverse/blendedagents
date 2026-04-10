@@ -102,12 +102,29 @@ export const TestCaseService = {
       if (!data.expected_behavior) {
         throw Errors.badRequest('expected_behavior is required for flow tests', { field: 'expected_behavior' });
       }
+      // Each step must have a meaningful instruction
+      for (let i = 0; i < data.steps.length; i++) {
+        const step = data.steps[i];
+        const instr = (step.instruction as string | undefined)?.trim();
+        if (!instr || instr.length < 3) {
+          throw Errors.badRequest(`step[${i}].instruction must be a non-empty string of at least 3 characters`, { field: `steps[${i}].instruction` });
+        }
+      }
     } else {
       if (!data.context) {
         throw Errors.badRequest('context is required for review tests', { field: 'context' });
       }
       if (!data.devices_to_check || data.devices_to_check.length === 0) {
         throw Errors.badRequest('devices_to_check must contain at least one device', { field: 'devices_to_check' });
+      }
+      // Detect step-like content in review test context — agents sometimes
+      // stuff numbered step instructions here instead of using flow_test.
+      const numberedItems = (data.context.match(/(?:^|\n|\s)\(?\d{1,2}[).:]/g) || []).length;
+      if (numberedItems >= 4) {
+        throw Errors.badRequest(
+          'Review test context contains numbered step-like instructions. If you have specific actions to perform, use template_type="flow_test" with a steps array instead. Review tests are for open-ended inspection, not step-by-step journeys.',
+          { field: 'context', numbered_items_detected: numberedItems, suggestion: 'use flow_test' },
+        );
       }
     }
 
