@@ -180,7 +180,7 @@ export async function testerRoutes(app: FastifyInstance) {
 
     const [{ count }] = await sql<[{ count: number }]>`
       SELECT count(*)::int AS count FROM test_cases tc
-      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('completed', 'submitted') ${searchCond}
+      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('completed', 'submitted') AND tc.type = 'standard' ${searchCond}
     `;
 
     const tasks = await sql<Array<{
@@ -193,7 +193,7 @@ export async function testerRoutes(app: FastifyInstance) {
          WHERE t.test_case_id = tc.id AND t.tester_id = ${tester.id} AND t.type = 'payout'
          LIMIT 1)::text AS payout_cents
       FROM test_cases tc
-      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('completed', 'submitted') ${searchCond}
+      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('completed', 'submitted') AND tc.type = 'standard' ${searchCond}
       ORDER BY tc.completed_at DESC LIMIT ${limit} OFFSET ${offset}
     `;
 

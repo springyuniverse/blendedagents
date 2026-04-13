@@ -6,6 +6,7 @@ import { PlatformSettingsModel } from '../models/platform-settings.js';
 import { Errors } from '../lib/errors.js';
 import sql from '../lib/db.js';
 import { S3Service } from '../services/s3.service.js';
+import { EmailService } from '../lib/email.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   await adminAuthPlugin(app);
@@ -39,7 +40,7 @@ export async function adminRoutes(app: FastifyInstance) {
       sql<{ count: string }[]>`SELECT count(*)::text FROM builders`,
       sql<{ count: string }[]>`SELECT count(*)::text FROM testers`,
       sql<{ status: string; count: string }[]>`
-        SELECT status, count(*)::text FROM test_cases GROUP BY status
+        SELECT status, count(*)::text FROM test_cases WHERE type = 'standard' GROUP BY status
       `,
       sql<{ total_topups: string; total_commissions: string; total_payouts: string; total_charges: string }[]>`
         SELECT
@@ -88,7 +89,7 @@ export async function adminRoutes(app: FastifyInstance) {
           count(*) FILTER (WHERE template_type = 'flow_test')::text AS flow,
           count(*) FILTER (WHERE template_type = 'review_test')::text AS review
         FROM test_cases
-        WHERE created_at >= now() - ${days + ' days'}::interval
+        WHERE created_at >= now() - ${days + ' days'}::interval AND type = 'standard'
         GROUP BY 1 ORDER BY 1
       `,
       sql<{ date: string; topups: string; commissions: string; payouts: string }[]>`
@@ -263,11 +264,27 @@ export async function adminRoutes(app: FastifyInstance) {
       return { ok: true };
     }
 
+    // Check if this is an activation (is_active flipping to true)
+    const isActivating = body.is_active === true;
+    let wasPreviouslyInactive = false;
+    if (isActivating) {
+      const existing = await TesterModel.findById(id);
+      wasPreviouslyInactive = !!existing && !existing.is_active;
+    }
+
     const [updated] = await sql`
       UPDATE testers SET ${sql(updates)}, updated_at = now()
       WHERE id = ${id}
       RETURNING *
     `;
+
+    // Send acceptance email when tester is newly activated
+    if (wasPreviouslyInactive && updated?.email) {
+      EmailService.sendTesterAccepted(updated.email, updated.display_name).catch((err) => {
+        request.log.error({ err, testerId: id }, 'Failed to send tester acceptance email');
+      });
+    }
+
     return updated;
   });
 
@@ -379,7 +396,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const [[{ count }], submissions] = await Promise.all([
       sql<{ count: string }[]>`
-        SELECT count(*)::text FROM test_cases tc WHERE tc.assigned_tester_id = ${id}
+        SELECT count(*)::text FROM test_cases tc WHERE tc.assigned_tester_id = ${id} AND tc.type = 'standard'
       `,
       sql`
         SELECT tc.id, tc.title, tc.template_type, tc.status,
@@ -394,7 +411,7 @@ export async function adminRoutes(app: FastifyInstance) {
         FROM test_cases tc
         LEFT JOIN builders b ON b.id = tc.builder_id
         LEFT JOIN test_results tr ON tr.test_case_id = tc.id AND tr.tester_id = ${id}
-        WHERE tc.assigned_tester_id = ${id}
+        WHERE tc.assigned_tester_id = ${id} AND tc.type = 'standard'
         ORDER BY tc.created_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
@@ -428,12 +445,13 @@ export async function adminRoutes(app: FastifyInstance) {
     const typeFrag = templateType ? sql`AND tc.template_type = ${templateType}` : sql``;
     const builderFrag = builderId ? sql`AND tc.builder_id = ${builderId}` : sql``;
     const testerFrag = testerId ? sql`AND tc.assigned_tester_id = ${testerId}` : sql``;
+    const excludeAssessments = sql`AND tc.type = 'standard'`;
 
     const [[{ count }], testCases] = await Promise.all([
       sql<{ count: string }[]>`
         SELECT count(*)::text FROM test_cases tc
         LEFT JOIN builders b ON b.id = tc.builder_id
-        WHERE 1=1 ${searchFrag} ${statusFrag} ${typeFrag} ${builderFrag} ${testerFrag}
+        WHERE 1=1 ${excludeAssessments} ${searchFrag} ${statusFrag} ${typeFrag} ${builderFrag} ${testerFrag}
       `,
       sql`
         SELECT tc.id, tc.title, tc.template_type, tc.status, tc.created_at, tc.updated_at,
@@ -447,7 +465,7 @@ export async function adminRoutes(app: FastifyInstance) {
         FROM test_cases tc
         LEFT JOIN builders b ON b.id = tc.builder_id
         LEFT JOIN testers t ON t.id = tc.assigned_tester_id
-        WHERE 1=1 ${searchFrag} ${statusFrag} ${typeFrag} ${builderFrag} ${testerFrag}
+        WHERE 1=1 ${excludeAssessments} ${searchFrag} ${statusFrag} ${typeFrag} ${builderFrag} ${testerFrag}
         ORDER BY tc.created_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
