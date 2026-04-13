@@ -5,6 +5,7 @@ import { CreditRateConfigModel } from '../models/credit-rate-config.js';
 import { TransactionModel, VALID_TRANSACTION_TYPES, type TransactionType } from '../models/transaction.js';
 import { StripeService, calculateCreditsForAmount } from '../services/stripe.service.js';
 import { Errors } from '../lib/errors.js';
+import sql from '../lib/db.js';
 
 export async function creditsRoutes(app: FastifyInstance) {
   await builderAuthPlugin(app);
@@ -113,5 +114,77 @@ export async function creditsRoutes(app: FastifyInstance) {
       next_cursor: page.next_cursor,
       has_more: page.has_more,
     };
+  });
+
+  // GET /api/v1/credits/tweet-reward — check if builder already claimed
+  app.get('/tweet-reward', async (request: FastifyRequest) => {
+    const builder = request.builder!;
+    const [reward] = await sql<{ id: string; tweet_url: string; credits_awarded: number; created_at: Date }[]>`
+      SELECT id, tweet_url, credits_awarded, created_at
+      FROM tweet_rewards
+      WHERE builder_id = ${builder.id} AND status = 'credited'
+    `;
+    return { claimed: !!reward, reward: reward ? { tweet_url: reward.tweet_url, credits_awarded: reward.credits_awarded, created_at: reward.created_at.toISOString() } : null };
+  });
+
+  // POST /api/v1/credits/tweet-reward — claim tweet credits
+  app.post('/tweet-reward', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['tweet_url'],
+        properties: {
+          tweet_url: { type: 'string', minLength: 10, maxLength: 500 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request: FastifyRequest<{ Body: { tweet_url: string } }>) => {
+    const builder = request.builder!;
+    const { tweet_url } = request.body;
+
+    // Validate tweet URL format
+    const tweetPattern = /^https?:\/\/(x\.com|twitter\.com)\/\w+\/status\/\d+/;
+    if (!tweetPattern.test(tweet_url)) {
+      throw Errors.badRequest('Invalid tweet URL. Must be a link to a post on x.com or twitter.com', { field: 'tweet_url' });
+    }
+
+    const REWARD_CREDITS = 25;
+
+    const result = await sql.begin(async (tx: any) => {
+      // Check if already claimed (unique index will catch race conditions too)
+      const [existing] = await tx<{ id: string }[]>`
+        SELECT id FROM tweet_rewards
+        WHERE builder_id = ${builder.id} AND status = 'credited'
+      `;
+      if (existing) {
+        throw Errors.badRequest('Tweet reward already claimed');
+      }
+
+      // Ensure credit balance exists
+      await CreditBalanceModel.ensureExists(builder.id);
+
+      // Insert reward record
+      await tx`
+        INSERT INTO tweet_rewards (builder_id, tweet_url, credits_awarded)
+        VALUES (${builder.id}, ${tweet_url}, ${REWARD_CREDITS})
+      `;
+
+      // Add credits
+      await CreditBalanceModel.topup(builder.id, REWARD_CREDITS, tx);
+
+      // Record transaction
+      await TransactionModel.insert({
+        type: 'topup',
+        builder_id: builder.id,
+        credit_amount: REWARD_CREDITS,
+        currency_amount_cents: 0,
+        description: `Tweet reward: ${REWARD_CREDITS} free credits`,
+      }, tx);
+
+      return { credits_awarded: REWARD_CREDITS };
+    });
+
+    return { success: true, credits_awarded: result.credits_awarded, message: `${result.credits_awarded} credits added to your account` };
   });
 }

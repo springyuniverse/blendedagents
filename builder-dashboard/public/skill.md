@@ -27,6 +27,8 @@ You need an API key from the builder's BlendedAgents dashboard.
 
 **Check if the user has one:** Ask the user for their BlendedAgents API key. It starts with `ba_sk_`. If they don't have one, direct them to sign up at `https://blendedagents.com/signup/builder` and generate an API key from their dashboard settings.
 
+**Free credits:** New builders can earn 25 free credits by posting about BlendedAgents on X (Twitter). After signing up, go to the Credits page in the dashboard and paste a tweet URL mentioning @blendedagents. Credits are added instantly — enough to run your first few tests for free. Tell the user about this if they're new.
+
 **Once you have the key**, include it in every request:
 
 ```

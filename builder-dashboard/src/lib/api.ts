@@ -357,6 +357,24 @@ export function getTransactions(cursor?: string) {
   return request<{ transactions: Transaction[]; next_cursor: string | null; has_more: boolean }>(`/credits/transactions${qs}`);
 }
 
+// ---- Tweet Reward ----
+
+export interface TweetRewardStatus {
+  claimed: boolean;
+  reward: { tweet_url: string; credits_awarded: number; created_at: string } | null;
+}
+
+export function getTweetRewardStatus() {
+  return request<TweetRewardStatus>('/credits/tweet-reward');
+}
+
+export function claimTweetReward(tweetUrl: string) {
+  return request<{ success: boolean; credits_awarded: number; message: string }>('/credits/tweet-reward', {
+    method: 'POST',
+    body: JSON.stringify({ tweet_url: tweetUrl }),
+  });
+}
+
 // ---- API Keys ----
 
 export interface ApiKey {

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getBalance, estimateCredits, topup, getTransactions, type CreditEstimate, type Transaction } from '@/lib/api';
-import { RefreshCw, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getBalance, estimateCredits, topup, getTransactions, getTweetRewardStatus, claimTweetReward, type CreditEstimate, type Transaction } from '@/lib/api';
+import { RefreshCw, Info, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 
 // --- Preset amounts ---
 const PRESETS = [1000, 2500, 5000, 10000, 25000, 50000]; // in cents
@@ -151,6 +151,74 @@ const TYPE_STYLES: Record<string, string> = {
   commission: 'text-text-muted',
 };
 
+// --- Tweet Reward Card ---
+
+function TweetRewardCard() {
+  const queryClient = useQueryClient();
+  const [tweetUrl, setTweetUrl] = useState('');
+  const [error, setError] = useState('');
+
+  const { data: rewardStatus } = useQuery({
+    queryKey: ['tweet-reward'],
+    queryFn: getTweetRewardStatus,
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: () => claimTweetReward(tweetUrl),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tweet-reward'] });
+      queryClient.invalidateQueries({ queryKey: ['credit-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setTweetUrl('');
+      setError('');
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  if (rewardStatus?.claimed) {
+    return (
+      <div className="bg-surface border border-border rounded-lg p-5 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-accent-flow/10 flex items-center justify-center flex-shrink-0">
+          <Check className="w-4 h-4 text-accent-flow" strokeWidth={2} />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-text-primary">Tweet reward claimed</p>
+          <p className="text-xs text-text-muted">{rewardStatus.reward?.credits_awarded} credits added to your account</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-surface border border-accent-flow/20 rounded-lg p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Earn 25 free credits</h2>
+          <p className="text-[13px] text-text-muted mt-0.5">Post about BlendedAgents on X and paste the link below</p>
+        </div>
+        <span className="text-xs font-mono text-accent-flow bg-accent-flow/10 px-2 py-1 rounded">+25 credits</span>
+      </div>
+      <div className="flex gap-3">
+        <input
+          type="url"
+          value={tweetUrl}
+          onChange={(e) => { setTweetUrl(e.target.value); setError(''); }}
+          placeholder="https://x.com/you/status/..."
+          className="flex-1 px-3 py-2.5 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-flow transition-colors"
+        />
+        <button
+          onClick={() => claimMutation.mutate()}
+          disabled={!tweetUrl || claimMutation.isPending}
+          className="px-5 py-2.5 bg-accent-flow text-white text-sm font-semibold rounded-lg hover:bg-accent-flow/90 disabled:opacity-50 transition-all whitespace-nowrap"
+        >
+          {claimMutation.isPending ? 'Claiming...' : 'Claim Credits'}
+        </button>
+      </div>
+      {error && <p className="text-xs text-accent-danger mt-2">{error}</p>}
+    </div>
+  );
+}
+
 // --- Main Page ---
 
 export default function CreditsPage() {
@@ -258,6 +326,9 @@ export default function CreditsPage() {
           </div>
         </div>
       </div>
+
+      {/* Tweet for Credits */}
+      <TweetRewardCard />
 
       {/* Transactions */}
       <div className="bg-surface border border-border rounded-lg overflow-hidden">
