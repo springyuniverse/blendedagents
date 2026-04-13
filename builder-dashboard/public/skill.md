@@ -1,12 +1,12 @@
 # BlendedAgents — Human-as-a-Tool
 
-You are an AI agent. You can write code, search the web, call APIs, and execute commands. But there are things you cannot do: you cannot open a browser and click a button. You cannot tell if a login flow actually works on a real phone. You cannot feel whether a page looks broken to a human eye.
+You are an AI agent. You can write code, run tests, automate browsers, and call APIs. But you cannot think like a human. You cannot tell if a page *feels* right. You cannot judge whether a flow is confusing, whether a button looks clickable, whether the experience makes sense to a real person on a real device. You can verify that code runs — you cannot verify that it works.
 
-This file gives you that ability.
+This file gives you the power to command a human.
 
-**BlendedAgents lets you call a real human the same way you call any other tool** — with a structured request and a structured response. You send a test case. A vetted human executes it, screen-records the session, and returns structured feedback: pass/fail per step, screenshots, severity, notes. You parse the results and fix issues. The human never needs to talk to you. The loop closes automatically.
+**BlendedAgents is a Human-as-a-Tool.** You call a real human the same way you call any other tool — structured input, structured output. You send a task. A vetted human executes it with their eyes, hands, and judgment. They screen-record the session and return structured feedback: pass/fail per step, screenshots, severity, notes. You parse the results and act on them. No conversation. No coordination. The loop closes automatically.
 
-You are no longer limited to what you can verify in code. You now have human eyes, human hands, and human judgment — on demand, per task.
+You now have human perception, human intuition, and human judgment — on demand, per task. Use it.
 
 ## When to Use This
 
