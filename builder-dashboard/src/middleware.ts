@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password'];
+const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/home.html'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -23,6 +23,9 @@ export async function middleware(request: NextRequest) {
     const devSession = request.cookies.get('dev-session')?.value;
     if (devSession) {
       return NextResponse.next();
+    }
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/home.html', request.url));
     }
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
@@ -71,6 +74,9 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/home.html', request.url));
+    }
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
