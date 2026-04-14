@@ -9,6 +9,7 @@ RUN NODE_ENV=development npm ci
 
 # Copy source
 COPY src/ ./src/
+COPY email-templates/ ./email-templates/
 COPY tsconfig.json ./
 
 ENV NODE_ENV=production
