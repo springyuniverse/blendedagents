@@ -61,8 +61,11 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   );
 }
 
+const emptyStats: AssessmentSummary['stats'] = { total_assigned: 0, total_completed: 0, total_passed: 0, pass_rate: 0, avg_detection: 0, avg_clarity: 0 };
+
 function AssessmentCard({ a, onClick }: { a: AssessmentSummary; onClick: () => void }) {
-  const passRate = a.stats.pass_rate;
+  const stats = a.stats || emptyStats;
+  const passRate = stats.pass_rate;
   return (
     <button
       onClick={onClick}
@@ -101,16 +104,16 @@ function AssessmentCard({ a, onClick }: { a: AssessmentSummary; onClick: () => v
       <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border">
         <div>
           <p className="text-[10px] text-text-muted">Assigned</p>
-          <p className="text-sm font-semibold text-text-primary">{a.stats.total_assigned}</p>
+          <p className="text-sm font-semibold text-text-primary">{stats.total_assigned}</p>
         </div>
         <div>
           <p className="text-[10px] text-text-muted">Completed</p>
-          <p className="text-sm font-semibold text-text-primary">{a.stats.total_completed}</p>
+          <p className="text-sm font-semibold text-text-primary">{stats.total_completed}</p>
         </div>
         <div>
           <p className="text-[10px] text-text-muted">Pass Rate</p>
           <p className={`text-sm font-semibold ${passRate >= 50 ? 'text-accent-review' : passRate > 0 ? 'text-accent-warning' : 'text-text-muted'}`}>
-            {a.stats.total_completed > 0 ? `${passRate}%` : '—'}
+            {stats.total_completed > 0 ? `${passRate}%` : '—'}
           </p>
         </div>
       </div>
@@ -153,12 +156,12 @@ function DetailView({ id, onBack }: { id: string; onBack: () => void }) {
 
       {/* Stats */}
       <div className="grid grid-cols-6 gap-3">
-        <StatCard label="Assigned" value={a.stats.total_assigned} />
-        <StatCard label="Completed" value={a.stats.total_completed} />
-        <StatCard label="Passed" value={a.stats.total_passed} />
-        <StatCard label="Pass Rate" value={a.stats.total_completed > 0 ? `${a.stats.pass_rate}%` : '—'} />
-        <StatCard label="Avg Detection" value={a.stats.avg_detection} sub={`of ${a.bug_count}`} />
-        <StatCard label="Avg Clarity" value={a.stats.avg_clarity} sub={`of 2.0`} />
+        <StatCard label="Assigned" value={a.stats?.total_assigned || 0} />
+        <StatCard label="Completed" value={a.stats?.total_completed || 0} />
+        <StatCard label="Passed" value={a.stats?.total_passed || 0} />
+        <StatCard label="Pass Rate" value={(a.stats?.total_completed || 0) > 0 ? `${a.stats.pass_rate}%` : '—'} />
+        <StatCard label="Avg Detection" value={a.stats?.avg_detection || 0} sub={`of ${a.bug_count}`} />
+        <StatCard label="Avg Clarity" value={a.stats?.avg_clarity || 0} sub={`of 2.0`} />
       </div>
 
       <div className="grid grid-cols-2 gap-6">
@@ -307,9 +310,9 @@ export default function AssessmentsPage() {
   }
 
   const assessments = data?.assessments || [];
-  const totalAssigned = assessments.reduce((sum, a) => sum + a.stats.total_assigned, 0);
-  const totalCompleted = assessments.reduce((sum, a) => sum + a.stats.total_completed, 0);
-  const totalPassed = assessments.reduce((sum, a) => sum + a.stats.total_passed, 0);
+  const totalAssigned = assessments.reduce((sum, a) => sum + (a.stats?.total_assigned || 0), 0);
+  const totalCompleted = assessments.reduce((sum, a) => sum + (a.stats?.total_completed || 0), 0);
+  const totalPassed = assessments.reduce((sum, a) => sum + (a.stats?.total_passed || 0), 0);
 
   return (
     <div className="space-y-6">
