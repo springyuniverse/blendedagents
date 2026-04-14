@@ -44,12 +44,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
       // Log the error but still return 200 for non-signature errors
       // to prevent Stripe from retrying on our application errors
       request.log.error(err, 'Webhook processing error');
-      reply.status(500).send({
-        error: {
-          code: 'WEBHOOK_ERROR',
-          message: 'Error processing webhook',
-        },
-      });
+      reply.status(200).send({ received: true });
     }
   });
 }

@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
         source: '/auth/:path*',
         destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:4000'}/auth/:path*`,
       },
+      {
+        source: '/webhooks/:path*',
+        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:4000'}/webhooks/:path*`,
+      },
     ];
   },
 };
