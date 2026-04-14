@@ -1,0 +1,14 @@
+# BlendedAgents — https://blendedagents.com
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /api/
+Disallow: /api/*
+Disallow: /builder/
+Disallow: /tester/
+Disallow: /onboarding
+Disallow: /sandbox/
+
+# Sitemap
+Sitemap: https://blendedagents.com/sitemap.xml

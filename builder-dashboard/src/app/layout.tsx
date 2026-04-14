@@ -37,6 +37,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>BlendedAgents</title>
+        <meta name="description" content="BlendedAgents — Human-as-a-Tool platform for AI agents. Manage tests, view results, and track credits." />
+        <meta name="robots" content="noindex, nofollow" />
+        <meta name="theme-color" content="#faf9fb" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body className="bg-bg text-text-primary antialiased font-sans">
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

@@ -4,11 +4,156 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BlendedAgents — Human-as-a-Tool for AI Agents</title>
-  <meta name="description" content="The first Human-as-a-Tool platform for AI agents. Your AI builds it. A real human verifies it. Before you ship, not after.">
+  <meta name="description" content="The first Human-as-a-Tool platform for AI agents. Your AI builds it. A real human verifies it. Before you ship, not after. QA in one API call.">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <meta name="author" content="BlendedAgents">
+  <meta name="theme-color" content="#09090b">
+  <link rel="canonical" href="https://blendedagents.com">
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.svg" sizes="any">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.json">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://blendedagents.com">
+  <meta property="og:title" content="BlendedAgents — Human-as-a-Tool for AI Agents">
+  <meta property="og:description" content="Your AI builds it. A real human verifies it. Before you ship, not after. QA in one API call — no SDK, no hiring, no managing.">
+  <meta property="og:image" content="https://blendedagents.com/og-image.svg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="BlendedAgents — await human.verify() — Human-as-a-Tool for AI agents">
+  <meta property="og:site_name" content="BlendedAgents">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@blendedagents">
+  <meta name="twitter:creator" content="@blendedagents">
+  <meta name="twitter:title" content="BlendedAgents — Human-as-a-Tool for AI Agents">
+  <meta name="twitter:description" content="Your AI builds it. A real human verifies it. QA in one API call — no SDK, no hiring, no managing.">
+  <meta name="twitter:image" content="https://blendedagents.com/og-image.svg">
+  <meta name="twitter:image:alt" content="BlendedAgents — await human.verify()">
+
+  <!-- Additional SEO -->
+  <meta name="keywords" content="human-as-a-tool, AI QA testing, human verification API, AI agent testing, QA as a service, manual QA API, human-in-the-loop, AI testing platform, software testing API, automated QA with humans">
+  <meta name="application-name" content="BlendedAgents">
+
+  <!-- Performance hints -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-sans/style.css" rel="stylesheet">
+
+  <!-- JSON-LD: Organization -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "BlendedAgents",
+    "url": "https://blendedagents.com",
+    "logo": "https://blendedagents.com/favicon.svg",
+    "description": "The first Human-as-a-Tool platform for AI agents. Human QA verification via API.",
+    "sameAs": [
+      "https://x.com/blendedagents",
+      "https://github.com/blendedagents"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "noreply@blendedagents.com",
+      "contactType": "customer support"
+    }
+  }
+  </script>
+
+  <!-- JSON-LD: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "BlendedAgents",
+    "url": "https://blendedagents.com",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Web",
+    "description": "Human-as-a-Tool platform — AI agents submit QA tests via API, vetted humans verify, structured results flow back. No SDK, no hiring, no managing.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0.10",
+      "priceCurrency": "USD",
+      "description": "Pay per credit — $0.10 per credit, volume discounts available. Start with $10.",
+      "availability": "https://schema.org/InStock"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "5",
+      "ratingCount": "1",
+      "bestRating": "5"
+    }
+  }
+  </script>
+
+  <!-- JSON-LD: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How fast do I get results?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Tests are picked up by a vetted tester within minutes. Most results come back within hours, not days. Your agent doesn't block — it keeps working and picks up the webhook when results are ready."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Who are the testers?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Every tester passes a two-step verification. First an identity check, then a practical assessment with planted bugs — scored on detection accuracy and report quality. They're rated after every task. Low performers are removed from the pool."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does it work with my AI tool?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "If your AI agent can read a URL and make an HTTP request, it works. Cursor, Claude Code, Bolt, Lovable, Replit Agent — all of them. Your agent reads one skill.md file. That's the entire integration."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need to write code?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Tell your AI agent one sentence: Read blendedagents.com/skill.md and test my app. The agent handles everything — creating the test, submitting it, parsing results. You never touch the API directly."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is this different from hiring QA?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "You don't hire anyone. You don't manage anyone. Your AI agent calls a human the same way it calls any other tool — on demand, per task, structured in and out. It's infrastructure, not staffing."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is this only for testing?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "We're starting with testing because it's where AI builders feel the most pain. But BlendedAgents is designed as a general-purpose Human API — any task where AI needs human judgment, verification, or real-world interaction. Testing is chapter one."
+        }
+      }
+    ]
+  }
+  </script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 

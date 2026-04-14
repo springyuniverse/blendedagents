@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="45%" r="50%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#09090b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#09090b"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Top bar accent line -->
+  <rect x="0" y="0" width="1200" height="3" fill="#34d399" opacity="0.6"/>
+
+  <!-- Logo -->
+  <text x="80" y="100" font-family="monospace, 'Courier New'" font-size="22" font-weight="500" letter-spacing="-0.5">
+    <tspan fill="#fafafa">blended</tspan><tspan fill="#34d399">agents</tspan>
+  </text>
+
+  <!-- Main heading -->
+  <text x="600" y="260" text-anchor="middle" font-family="monospace, 'Courier New'" font-size="64" font-weight="700" letter-spacing="-2" fill="#fafafa">
+    <tspan fill="#34d399">await</tspan> human<tspan fill="rgba(250,250,250,0.25)">.</tspan><tspan fill="#6ee7b7">verify</tspan><tspan fill="rgba(250,250,250,0.25)">()</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="600" y="330" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="28" fill="rgba(250,250,250,0.65)" letter-spacing="-0.3">
+    The first Human-as-a-Tool for AI agents
+  </text>
+
+  <!-- Subline -->
+  <text x="600" y="380" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="rgba(250,250,250,0.4)">
+    Your AI builds it. A real human verifies it. Before you ship.
+  </text>
+
+  <!-- Terminal box -->
+  <rect x="340" y="430" width="520" height="80" rx="10" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <circle cx="368" cy="450" r="4" fill="rgba(255,255,255,0.1)"/>
+  <circle cx="384" cy="450" r="4" fill="rgba(255,255,255,0.1)"/>
+  <circle cx="400" cy="450" r="4" fill="rgba(255,255,255,0.1)"/>
+  <text x="370" y="490" font-family="monospace, 'Courier New'" font-size="14" fill="rgba(250,250,250,0.25)">$ </text>
+  <text x="390" y="490" font-family="monospace, 'Courier New'" font-size="14" fill="rgba(250,250,250,0.45)">"Read </text>
+  <text x="450" y="490" font-family="monospace, 'Courier New'" font-size="14" fill="#4ade80">blendedagents.com/skill.md</text>
+  <text x="720" y="490" font-family="monospace, 'Courier New'" font-size="14" fill="rgba(250,250,250,0.45)"> and test my app"</text>
+
+  <!-- URL -->
+  <text x="600" y="600" text-anchor="middle" font-family="monospace, 'Courier New'" font-size="16" fill="#34d399" opacity="0.7">blendedagents.com</text>
+</svg>

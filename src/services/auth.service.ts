@@ -98,10 +98,7 @@ export const AuthService = {
       ON CONFLICT (builder_id) DO NOTHING
     `;
 
-    // Send builder welcome email (fire-and-forget)
-    EmailService.sendBuilderWelcome(created.email, created.display_name, 0).catch(err =>
-      console.error('Failed to send builder welcome email', err),
-    );
+    // Welcome email is sent by the /webhooks/auth endpoint (Supabase database webhook)
 
     return created;
   },
@@ -176,10 +173,7 @@ export const AuthService = {
       }
     }
 
-    // Send tester welcome email (fire-and-forget)
-    EmailService.sendTesterWelcome(created.email, created.display_name, inviteCode || '').catch(err =>
-      console.error('Failed to send tester welcome email', err),
-    );
+    // Welcome email is sent by the /webhooks/auth endpoint (Supabase database webhook)
 
     return created;
   },

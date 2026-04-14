@@ -8,6 +8,7 @@ import { authRoutes } from './api/auth.routes.js';
 import { builderApiRoutes } from './api/builder-api.routes.js';
 import { creditsRoutes } from './api/credits.routes.js';
 import { stripeWebhookRoutes } from './api/stripe-webhook.routes.js';
+import { authWebhookRoutes } from './api/auth-webhook.routes.js';
 import { testCasesRoutes } from './api/test-cases.routes.js';
 import { templatesRoutes } from './api/templates.routes.js';
 import { PayoutService } from './services/payout.service.js';
@@ -88,6 +89,7 @@ export function buildApp() {
   app.register(builderApiRoutes, { prefix: '/api/v1' });
   app.register(creditsRoutes, { prefix: '/api/v1/credits' });
   app.register(stripeWebhookRoutes, { prefix: '/webhooks' });
+  app.register(authWebhookRoutes, { prefix: '/webhooks' });
   app.register(testCasesRoutes, { prefix: '/api/v1/test-cases' });
   app.register(templatesRoutes, { prefix: '/api/v1/templates' });
   app.register(testerRoutes, { prefix: '/api/v1/tester' });
