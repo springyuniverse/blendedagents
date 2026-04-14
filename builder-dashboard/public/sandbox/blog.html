@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudBlog CMS</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6f8; color: #1a1a2e; display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; background: #fff; border-right: 1px solid #e2e4e9; display: flex; flex-direction: column; flex-shrink: 0; }
+  .logo { padding: 20px 18px; font-size: 17px; font-weight: 700; color: #4f46e5; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e2e4e9; }
+  .logo svg { width: 22px; height: 22px; }
+  .nav { list-style: none; padding: 12px 8px; flex: 1; }
+  .nav li { padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; color: #52556a; display: flex; align-items: center; gap: 10px; margin-bottom: 2px; transition: background .15s; }
+  .nav li:hover { background: #f0f0f5; }
+  .nav li.active { background: #eef2ff; color: #4f46e5; }
+  .nav li .icon { width: 18px; text-align: center; font-size: 15px; }
+  .badge { background: #4f46e5; color: #fff; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; margin-left: auto; }
+  .sidebar-footer { padding: 14px 18px; border-top: 1px solid #e2e4e9; font-size: 12px; color: #9196a1; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; padding: 32px; }
+  .content-wrap { max-width: 480px; margin: 0 auto; }
+  .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
+
+  /* Editor */
+  .editor-card { background: #fff; border-radius: 12px; border: 1px solid #e2e4e9; padding: 24px; }
+  .field-label { font-size: 12px; font-weight: 600; color: #71747e; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .field-group { margin-bottom: 20px; }
+  input[type="text"], select, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit; transition: border-color .15s; outline: none; }
+  input[type="text"]:focus, select:focus, textarea:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+  textarea { min-height: 180px; resize: vertical; line-height: 1.6; }
+  select { appearance: none; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%2371747e' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 12px center; }
+
+  /* Upload area */
+  .upload-area { border: 2px dashed #d1d5db; border-radius: 8px; padding: 24px; text-align: center; color: #9196a1; font-size: 13px; cursor: pointer; transition: border-color .15s; position: relative; overflow: hidden; }
+  .upload-area:hover { border-color: #4f46e5; }
+  .upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-area img { max-width: 100%; max-height: 140px; border-radius: 6px; display: block; margin: 0 auto; }
+  .upload-area .placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .upload-area .placeholder .ico { font-size: 24px; }
+
+  /* Stats bar */
+  .stats-bar { display: flex; gap: 16px; margin-top: 16px; font-size: 12px; color: #71747e; }
+  .stats-bar span { display: flex; align-items: center; gap: 4px; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+  .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; transition: background .15s, transform .1s; }
+  .btn:active { transform: scale(.97); }
+  .btn-secondary { background: #f0f0f5; color: #52556a; }
+  .btn-secondary:hover { background: #e4e4ed; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { background: #4338ca; }
+
+  /* Posts list */
+  .posts-list { display: flex; flex-direction: column; gap: 10px; }
+  .post-item { background: #fff; border: 1px solid #e2e4e9; border-radius: 10px; padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; }
+  .post-item .post-info h3 { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  .post-item .post-info p { font-size: 12px; color: #9196a1; }
+  .post-status { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+  .status-published { background: #ecfdf5; color: #059669; }
+  .status-draft { background: #fef3c7; color: #d97706; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a2e; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; opacity: 0; transform: translateY(8px); transition: all .25s; pointer-events: none; z-index: 99; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    CloudBlog
+  </div>
+  <ul class="nav">
+    <li class="active" data-view="editor"><span class="icon">&#9998;</span> Dashboard</li>
+    <li data-view="posts"><span class="icon">&#128196;</span> Posts <span class="badge" id="postsBadge">5</span></li>
+    <li data-view="drafts"><span class="icon">&#128221;</span> Drafts</li>
+    <li data-view="media"><span class="icon">&#128247;</span> Media Library</li>
+  </ul>
+  <div class="sidebar-footer">CloudBlog CMS v1.2.0</div>
+</div>
+
+<div class="main">
+  <!-- Editor View -->
+  <div class="content-wrap view" id="view-editor">
+    <h1 class="page-title">New Post</h1>
+    <div class="editor-card">
+      <div class="field-group">
+        <div class="field-label">Title</div>
+        <input type="text" id="postTitle" placeholder="Enter post title...">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Body</div>
+        <textarea id="postBody" placeholder="Write your post content here..."></textarea>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Category</div>
+        <select id="postCategory">
+          <option value="">Select category</option>
+          <option value="technology">Technology</option>
+          <option value="design">Design</option>
+          <option value="business">Business</option>
+          <option value="lifestyle">Lifestyle</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Featured Image</div>
+        <div class="upload-area" id="uploadArea">
+          <div class="placeholder" id="uploadPlaceholder">
+            <span class="ico">&#128424;</span>
+            <span>Click or drag to upload an image</span>
+          </div>
+        </div>
+      </div>
+      <div class="stats-bar" id="statsBar">
+        <span id="wordCount">&#128221; 0 words</span>
+        <span id="readTime">&#9201; 0 min read</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="btnSaveDraft">Save Draft</button>
+        <button class="btn btn-primary" id="btnPublish">Publish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Posts View -->
+  <div class="content-wrap view" id="view-posts" style="display:none">
+    <h1 class="page-title">All Posts</h1>
+    <div class="posts-list" id="postsList"></div>
+  </div>
+
+  <!-- Drafts View -->
+  <div class="content-wrap view" id="view-drafts" style="display:none">
+    <h1 class="page-title">Drafts</h1>
+    <div class="posts-list" id="draftsList"></div>
+  </div>
+
+  <!-- Media View -->
+  <div class="content-wrap view" id="view-media" style="display:none">
+    <h1 class="page-title">Media Library</h1>
+    <p style="color:#9196a1; font-size:14px;">No media files uploaded yet.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  // --- State ---
+  var posts = [
+    { id: 1, title: 'Getting Started with Cloud Architecture', body: 'Cloud architecture involves designing systems that leverage cloud services for scalability and reliability.', category: 'technology', status: 'published', date: 'Apr 10, 2026', image: null },
+    { id: 2, title: 'Design Systems That Scale', body: 'A good design system provides consistent components and patterns across your product.', category: 'design', status: 'published', date: 'Apr 8, 2026', image: null },
+    { id: 3, title: 'Remote Work Best Practices', body: 'Remote work requires intentional communication and clear boundaries between work and life.', category: 'lifestyle', status: 'draft', date: 'Apr 5, 2026', image: null }
+  ];
+  var nextId = 4;
+
+  // BUG 4 setup: track whether stats have been "saved" once
+  var statsFrozen = false;
+  var frozenWordCount = 0;
+  var frozenReadTime = 0;
+
+  // --- DOM refs ---
+  var navItems = document.querySelectorAll('.nav li');
+  var views = document.querySelectorAll('.view');
+  var titleInput = document.getElementById('postTitle');
+  var bodyInput = document.getElementById('postBody');
+  var categorySelect = document.getElementById('postCategory');
+  var uploadArea = document.getElementById('uploadArea');
+  var uploadPlaceholder = document.getElementById('uploadPlaceholder');
+  var wordCountEl = document.getElementById('wordCount');
+  var readTimeEl = document.getElementById('readTime');
+  var btnSaveDraft = document.getElementById('btnSaveDraft');
+  var btnPublish = document.getElementById('btnPublish');
+  var postsList = document.getElementById('postsList');
+  var draftsList = document.getElementById('draftsList');
+  var toastEl = document.getElementById('toast');
+
+  // --- Navigation ---
+  navItems.forEach(function(item) {
+    item.addEventListener('click', function() {
+      navItems.forEach(function(n) { n.classList.remove('active'); });
+      item.classList.add('active');
+      var target = item.getAttribute('data-view');
+      views.forEach(function(v) { v.style.display = 'none'; });
+      document.getElementById('view-' + target).style.display = '';
+      if (target === 'posts') renderPosts();
+      if (target === 'drafts') renderDrafts();
+    });
+  });
+
+  // --- Image Upload (simulated) ---
+  // BUG 2: Image shows in preview but is never stored in the post state
+  var currentImageDataUrl = null;
+
+  uploadArea.addEventListener('click', function() {
+    var fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        currentImageDataUrl = ev.target.result;
+        uploadArea.innerHTML = '<img src="' + currentImageDataUrl + '" alt="Featured">';
+      };
+      reader.readAsDataURL(file);
+    });
+    fileInput.click();
+  });
+
+  // --- Word Count / Reading Time ---
+  function updateStats() {
+    // BUG 4: After first save, stats freeze and don't update on subsequent edits
+    if (statsFrozen) {
+      wordCountEl.textContent = '\uD83D\uDCDD ' + frozenWordCount + ' words';
+      readTimeEl.textContent = '\u23F1 ' + frozenReadTime + ' min read';
+      return;
+    }
+    var text = bodyInput.value.trim();
+    var words = text.length === 0 ? 0 : text.split(/\s+/).length;
+    var mins = Math.max(1, Math.ceil(words / 200));
+    wordCountEl.textContent = '\uD83D\uDCDD ' + words + ' words';
+    readTimeEl.textContent = '\u23F1 ' + mins + ' min read';
+  }
+
+  bodyInput.addEventListener('input', updateStats);
+
+  // --- Save Draft ---
+  btnSaveDraft.addEventListener('click', function() {
+    var title = titleInput.value.trim();
+    if (!title) { showToast('Please enter a post title.'); return; }
+
+    // BUG 4: Freeze stats on first save
+    if (!statsFrozen) {
+      var text = bodyInput.value.trim();
+      var words = text.length === 0 ? 0 : text.split(/\s+/).length;
+      frozenWordCount = words;
+      frozenReadTime = Math.max(1, Math.ceil(words / 200));
+      statsFrozen = true;
+    }
+
+    // BUG 2: currentImageDataUrl is intentionally NOT saved into the post object
+    posts.push({
+      id: nextId++,
+      title: title,
+      body: bodyInput.value,
+      category: categorySelect.value,
+      status: 'draft',
+      date: formatDate(new Date()),
+      image: null  // should be currentImageDataUrl but we "forget" it
+    });
+    showToast('Draft saved successfully.');
+    updateStats();
+  });
+
+  // --- Publish ---
+  btnPublish.addEventListener('click', function() {
+    var title = titleInput.value.trim();
+    if (!title) { showToast('Please enter a post title.'); return; }
+
+    // BUG 4: Freeze stats on first save/publish
+    if (!statsFrozen) {
+      var text = bodyInput.value.trim();
+      var words = text.length === 0 ? 0 : text.split(/\s+/).length;
+      frozenWordCount = words;
+      frozenReadTime = Math.max(1, Math.ceil(words / 200));
+      statsFrozen = true;
+    }
+
+    // BUG 3: Publish date is hardcoded to an old date instead of current date
+    posts.push({
+      id: nextId++,
+      title: title,
+      body: bodyInput.value,
+      category: categorySelect.value,
+      status: 'published',
+      date: 'March 15, 2026',
+      image: null
+    });
+    showToast('Post published!');
+    clearEditor();
+    updateStats();
+  });
+
+  // --- Render Posts ---
+  function renderPosts() {
+    var html = '';
+    posts.forEach(function(p) {
+      if (p.status === 'published') {
+        html += '<div class="post-item"><div class="post-info"><h3>' + escHtml(p.title) + '</h3><p>' + escHtml(p.category || 'Uncategorized') + ' &middot; ' + p.date + '</p></div><span class="post-status status-published">Published</span></div>';
+      }
+    });
+    if (!html) html = '<p style="color:#9196a1;font-size:14px;">No published posts yet.</p>';
+    postsList.innerHTML = html;
+  }
+
+  function renderDrafts() {
+    var html = '';
+    posts.forEach(function(p) {
+      if (p.status === 'draft') {
+        html += '<div class="post-item"><div class="post-info"><h3>' + escHtml(p.title) + '</h3><p>' + escHtml(p.category || 'Uncategorized') + ' &middot; ' + p.date + '</p></div><span class="post-status status-draft">Draft</span></div>';
+      }
+    });
+    if (!html) html = '<p style="color:#9196a1;font-size:14px;">No drafts yet.</p>';
+    draftsList.innerHTML = html;
+  }
+
+  // --- Helpers ---
+  function clearEditor() {
+    titleInput.value = '';
+    bodyInput.value = '';
+    categorySelect.value = '';
+    currentImageDataUrl = null;
+    uploadArea.innerHTML = '<div class="placeholder" id="uploadPlaceholder"><span class="ico">&#128424;</span><span>Click or drag to upload an image</span></div>';
+    statsFrozen = false;
+    frozenWordCount = 0;
+    frozenReadTime = 0;
+    updateStats();
+  }
+
+  function formatDate(d) {
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+
+  function escHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  var toastTimer;
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 2500);
+  }
+
+  // BUG 1: Badge says "5" but only 3 posts exist in the data
+  // (postsBadge is hardcoded to 5 in the HTML and never updated)
+})();
+</script>
+</body>
+</html>

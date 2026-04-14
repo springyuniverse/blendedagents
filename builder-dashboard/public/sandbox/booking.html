@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EventHub — Conference Booking</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f5f7; color: #1a1a2e; line-height: 1.5; }
+  .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 24px; }
+  h2 { font-size: 22px; font-weight: 600; margin-bottom: 16px; }
+  h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+
+  /* Event Cards */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+  .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); cursor: pointer; transition: transform .15s, box-shadow .15s; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+  .card-img { height: 140px; display: flex; align-items: flex-end; padding: 14px; color: #fff; font-weight: 700; font-size: 18px; }
+  .card-body { padding: 14px; }
+  .card-meta { font-size: 13px; color: #666; margin-bottom: 6px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-price { background: #e8f5e9; color: #2e7d32; }
+
+  /* Detail Page */
+  #detail { display: none; }
+  .banner { height: 180px; border-radius: 12px; display: flex; align-items: flex-end; padding: 20px; margin-bottom: 24px; overflow: hidden; white-space: nowrap; }
+  .banner h2 { color: #fff; font-size: 26px; text-shadow: 0 2px 8px rgba(0,0,0,.5); margin: 0; }
+  .back-btn { background: none; border: none; color: #4361ee; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
+
+  /* Schedule */
+  .schedule { margin-bottom: 24px; }
+  .session { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #eee; }
+  .session-time { min-width: 130px; font-size: 13px; color: #555; font-weight: 500; }
+  .session-title { font-size: 14px; }
+
+  /* Tickets */
+  .tier { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
+  .tier-info span { font-size: 13px; color: #666; }
+  .qty { display: flex; align-items: center; gap: 8px; }
+  .qty button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #ccc; background: #fff; font-size: 16px; cursor: pointer; }
+  .qty button:hover { background: #f0f0f0; }
+  .qty span { min-width: 20px; text-align: center; font-weight: 600; }
+
+  /* Discount */
+  .discount-row { display: flex; gap: 8px; margin: 16px 0; }
+  .discount-row input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
+  .discount-row button { padding: 8px 18px; border: none; border-radius: 8px; background: #4361ee; color: #fff; font-weight: 600; cursor: pointer; }
+  .discount-msg { font-size: 13px; margin-bottom: 8px; min-height: 18px; }
+  .discount-msg.ok { color: #2e7d32; }
+  .discount-msg.err { color: #c62828; }
+
+  /* Order Summary */
+  .summary { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 24px; }
+  .summary-line { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+  .summary-line.total { border-top: 2px solid #1a1a2e; margin-top: 8px; padding-top: 12px; font-weight: 700; font-size: 16px; }
+  .checkout-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; background: #4361ee; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .checkout-btn:hover { background: #3a56d4; }
+
+  /* Seat Map */
+  .seat-map { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; max-width: 400px; margin: 0 auto 24px; }
+  .seat { aspect-ratio: 1; border-radius: 6px; border: none; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; }
+  .seat.available { background: #a8d5ba; }
+  .seat.selected { background: #4361ee; }
+  .seat.taken { background: #ccc; cursor: default; }
+  .seat-legend { display: flex; gap: 16px; justify-content: center; margin-bottom: 12px; font-size: 12px; }
+  .seat-legend span::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+  .seat-legend .l-avail::before { background: #a8d5ba; }
+  .seat-legend .l-sel::before { background: #4361ee; }
+  .seat-legend .l-taken::before { background: #ccc; }
+  .section-title { font-size: 18px; font-weight: 600; margin: 20px 0 12px; }
+
+  /* Description & speakers */
+  .ev-description { font-size: 14px; color: #444; margin-bottom: 20px; line-height: 1.7; }
+  .speakers { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .speaker { display: flex; align-items: center; gap: 10px; background: #fff; padding: 10px 14px; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .speaker-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; }
+  .speaker-name { font-size: 13px; font-weight: 600; }
+  .speaker-role { font-size: 11px; color: #888; }
+  .attendee-count { display: inline-flex; align-items: center; gap: 6px; background: #eef; color: #4361ee; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 18px; }
+  .stage-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #999; font-weight: 600; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- LISTING PAGE -->
+  <div id="listing">
+    <h1>EventHub</h1>
+    <p style="margin-bottom:20px;color:#555;">Discover and book top conferences</p>
+    <div class="card-grid" id="cards"></div>
+  </div>
+
+  <!-- DETAIL PAGE -->
+  <div id="detail">
+    <button class="back-btn" onclick="showListing()">&larr; Back to events</button>
+    <div class="banner" id="banner"><h2 id="evTitle"></h2></div>
+    <div style="display:flex;gap:8px;margin-bottom:18px;">
+      <span class="badge badge-price" id="evDate"></span>
+      <span class="badge badge-price" id="evVenue"></span>
+    </div>
+
+    <div class="ev-description" id="evDesc"></div>
+    <div class="attendee-count" id="evAttendees"></div>
+
+    <div class="section-title">Speakers</div>
+    <div class="speakers" id="evSpeakers"></div>
+
+    <div class="section-title">Schedule</div>
+    <div class="schedule" id="schedule"></div>
+
+    <div class="section-title">Select Tickets</div>
+    <div id="tiers"></div>
+
+    <div class="section-title">Discount Code</div>
+    <div class="discount-row">
+      <input type="text" id="discountInput" placeholder="Enter code">
+      <button onclick="applyDiscount()">Apply</button>
+    </div>
+    <div class="discount-msg" id="discountMsg"></div>
+
+    <div class="section-title">Choose Your Seat</div>
+    <div class="seat-legend">
+      <span class="l-avail">Available</span>
+      <span class="l-sel">Selected</span>
+      <span class="l-taken">Taken</span>
+    </div>
+    <div class="seat-map" id="seatMap"></div>
+
+    <div class="summary" id="summary"></div>
+    <button class="checkout-btn" onclick="alert('Booking confirmed! Check your email for tickets.')">Checkout</button>
+  </div>
+</div>
+
+<script>
+const events = [
+  {
+    id: 1,
+    name: "International AI & Machine Learning Summit 2026",
+    date: "May 14-16, 2026",
+    venue: "Javits Center, New York",
+    price: "$49 – $149",
+    color: "linear-gradient(135deg,#4361ee,#7209b7)",
+    description: "Join 2,000+ AI practitioners for three days of cutting-edge talks, hands-on workshops, and unparalleled networking at NYC's premier venue.",
+    attendees: 1847,
+    speakers: [
+      { name: "Dr. Sarah Chen", role: "AI Research Lead, DeepMind", color: "#7209b7" },
+      { name: "Marcus Webb", role: "CTO, Anthropic", color: "#4361ee" },
+      { name: "Priya Patel", role: "ML Engineer, OpenAI", color: "#f72585" }
+    ],
+    sessions: [
+      { time: [14,0,15,30], title: "Opening Keynote: The Future of LLMs", stage: "Main Hall" },
+      { time: [16,0,17,0], title: "Workshop: Prompt Engineering Masterclass", stage: "Room B" },
+      { time: [17,30,19,0], title: "Panel: Ethics in Generative AI", stage: "Main Hall" },
+      { time: [20,0,21,30], title: "Networking Reception", stage: "Rooftop" }
+    ]
+  },
+  {
+    id: 2,
+    name: "DevOps World",
+    date: "June 8-9, 2026",
+    venue: "Moscone Center, San Francisco",
+    price: "$49 – $149",
+    color: "linear-gradient(135deg,#f72585,#b5179e)",
+    description: "The definitive DevOps conference — two days of infrastructure deep dives, platform engineering best practices, and live demos.",
+    attendees: 1220,
+    speakers: [
+      { name: "Jake Morrison", role: "Staff SRE, Google", color: "#f72585" },
+      { name: "Anya Kowalski", role: "VP Eng, HashiCorp", color: "#b5179e" }
+    ],
+    sessions: [
+      { time: [9,0,10,30], title: "Keynote: Platform Engineering in 2026", stage: "Main Stage" },
+      { time: [11,0,12,0], title: "CI/CD Pipeline Deep Dive", stage: "Workshop Room" },
+      { time: [13,30,15,0], title: "Workshop: Kubernetes at Scale", stage: "Lab A" }
+    ]
+  },
+  {
+    id: 3,
+    name: "ProductCon",
+    date: "July 20, 2026",
+    venue: "Tech Hub, Austin",
+    price: "$49 – $149",
+    color: "linear-gradient(135deg,#06d6a0,#118ab2)",
+    description: "A single-day, high-impact product management conference featuring top PMs from leading startups and enterprises.",
+    attendees: 640,
+    speakers: [
+      { name: "Lisa Nguyen", role: "CPO, Figma", color: "#06d6a0" },
+      { name: "David Park", role: "Head of Product, Stripe", color: "#118ab2" }
+    ],
+    sessions: [
+      { time: [14,0,15,0], title: "Growth Hacking for PMs", stage: "Auditorium" },
+      { time: [15,30,16,30], title: "User Research That Ships", stage: "Breakout Room" },
+      { time: [17,0,18,30], title: "Fireside Chat: Building 0-to-1 Products", stage: "Auditorium" }
+    ]
+  }
+];
+
+const tiers = [
+  { name: "General Admission", price: 49 },
+  { name: "VIP Pass", price: 149 },
+  { name: "Workshop Add-on", price: 35 }
+];
+
+let quantities = [0, 0, 0];
+let discountPct = 0;
+let discountCode = "";
+let selectedSeats = new Set();
+let currentEvent = null;
+
+function fmtTime(h, m) {
+  const suffix = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+
+function renderCards() {
+  const el = document.getElementById("cards");
+  el.innerHTML = events.map(e => `
+    <div class="card" onclick="showDetail(${e.id})">
+      <div class="card-img" style="background:${e.color}">${e.name}</div>
+      <div class="card-body">
+        <div class="card-meta">${e.date} &middot; ${e.venue}</div>
+        <span class="badge badge-price">${e.price}</span>
+      </div>
+    </div>`).join("");
+}
+
+function showListing() {
+  document.getElementById("listing").style.display = "";
+  document.getElementById("detail").style.display = "none";
+  quantities = [0, 0, 0]; discountPct = 0; discountCode = "";
+  selectedSeats.clear();
+}
+
+function showDetail(id) {
+  currentEvent = events.find(e => e.id === id);
+  document.getElementById("listing").style.display = "none";
+  document.getElementById("detail").style.display = "";
+  document.getElementById("banner").style.background = currentEvent.color;
+  document.getElementById("evTitle").textContent = currentEvent.name;
+  document.getElementById("evDate").textContent = currentEvent.date;
+  document.getElementById("evVenue").textContent = currentEvent.venue;
+  document.getElementById("evDesc").textContent = currentEvent.description;
+  document.getElementById("evAttendees").innerHTML = `&#128100; ${currentEvent.attendees.toLocaleString()} registered`;
+  renderSpeakers();
+  renderSchedule();
+  renderTiers();
+  renderSeatMap();
+  updateSummary();
+}
+
+function renderSpeakers() {
+  const el = document.getElementById("evSpeakers");
+  el.innerHTML = currentEvent.speakers.map(s => `
+    <div class="speaker">
+      <div class="speaker-avatar" style="background:${s.color}">${s.name.split(" ").map(w => w[0]).join("")}</div>
+      <div>
+        <div class="speaker-name">${s.name}</div>
+        <div class="speaker-role">${s.role}</div>
+      </div>
+    </div>`).join("");
+}
+
+function renderSchedule() {
+  const el = document.getElementById("schedule");
+  el.innerHTML = currentEvent.sessions.map(s => {
+    const [sh, sm, eh, em] = s.time;
+    return `<div class="session">
+      <div class="session-time">${fmtTime(sh, sm)} – ${fmtTime(eh, em)}</div>
+      <div>
+        <div class="session-title">${s.title}</div>
+        <div class="stage-label">${s.stage}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderTiers() {
+  const el = document.getElementById("tiers");
+  el.innerHTML = tiers.map((t, i) => `
+    <div class="tier">
+      <div class="tier-info"><h3>${t.name}</h3><span>$${t.price}</span></div>
+      <div class="qty">
+        <button onclick="changeQty(${i},-1)">−</button>
+        <span id="qty${i}">${quantities[i]}</span>
+        <button onclick="changeQty(${i},1)">+</button>
+      </div>
+    </div>`).join("");
+}
+
+function changeQty(idx, delta) {
+  quantities[idx] = Math.max(0, quantities[idx] + delta);
+  document.getElementById("qty" + idx).textContent = quantities[idx];
+  updateSummary();
+}
+
+function applyDiscount() {
+  const code = document.getElementById("discountInput").value.trim().toUpperCase();
+  const msg = document.getElementById("discountMsg");
+
+  if (code === "EARLYBIRD20") {
+    discountPct = 0;
+    discountCode = code;
+    msg.textContent = "EARLYBIRD20 applied — 20% off!";
+    msg.className = "discount-msg ok";
+  } else if (code === "FLASH10") {
+    discountPct = 10;
+    discountCode = code;
+    msg.textContent = "FLASH10 applied — 10% off!";
+    msg.className = "discount-msg ok";
+  } else {
+    discountPct = 0; discountCode = "";
+    msg.textContent = "Invalid discount code.";
+    msg.className = "discount-msg err";
+  }
+  updateSummary();
+}
+
+function updateSummary() {
+  const el = document.getElementById("summary");
+  let lines = [];
+  let subtotal = 0;
+
+  tiers.forEach((t, i) => {
+    if (quantities[i] > 0) {
+      const amt = t.price * quantities[i];
+      subtotal += amt;
+      lines.push(`<div class="summary-line"><span>${quantities[i]}x ${t.name}</span><span>$${amt.toFixed(2)}</span></div>`);
+    }
+  });
+
+  if (selectedSeats.size > 0) {
+    lines.push(`<div class="summary-line"><span>Seats selected</span><span>${selectedSeats.size}</span></div>`);
+  }
+
+  const fee = subtotal * 0.10;
+  lines.push(`<div class="summary-line"><span>Service fee (10%)</span><span>$${fee.toFixed(2)}</span></div>`);
+
+  const afterFee = subtotal + fee;
+  const discountAmt = afterFee * (discountPct / 100);
+
+  if (discountCode) {
+    lines.push(`<div class="summary-line" style="color:#2e7d32"><span>Discount (${discountCode})</span><span>−$${discountAmt.toFixed(2)}</span></div>`);
+  }
+
+  const total = afterFee - discountAmt;
+  lines.push(`<div class="summary-line total"><span>Total</span><span>$${total.toFixed(2)}</span></div>`);
+  el.innerHTML = lines.join("");
+}
+
+function renderSeatMap() {
+  const el = document.getElementById("seatMap");
+  const taken = new Set([3,7,12,15,22,25,31,36,42,48]);
+  let html = "";
+  for (let i = 0; i < 50; i++) {
+    const isTaken = taken.has(i);
+    const row = Math.floor(i / 10);
+    const col = i % 10;
+    const label = String.fromCharCode(65 + row) + (col + 1);
+
+    if (isTaken) {
+      html += `<button class="seat taken" disabled>${label}</button>`;
+    } else {
+      html += `<button class="seat available" data-idx="${i}" onclick="toggleSeat(this,${i},${col})">${label}</button>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function toggleSeat(btn, idx, col) {
+  if (selectedSeats.has(idx)) {
+    selectedSeats.delete(idx);
+    btn.className = "seat available";
+  } else {
+    selectedSeats.add(idx);
+    if (col < 9) {
+      btn.className = "seat selected";
+    }
+  }
+  updateSummary();
+}
+
+renderCards();
+</script>
+</body>
+</html>

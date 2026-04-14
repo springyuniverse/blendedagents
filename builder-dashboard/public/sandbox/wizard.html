@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaunchPad — Startup Onboarding Wizard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6f8; color: #1a1a2e; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 40px 20px; }
+  .wizard { background: #fff; border-radius: 12px; box-shadow: 0 2px 20px rgba(0,0,0,0.08); max-width: 640px; width: 100%; padding: 32px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #1a1a2e; }
+  h2 { font-size: 17px; font-weight: 600; margin-bottom: 16px; color: #333; }
+
+  /* Progress bar */
+  .progress-container { margin-bottom: 28px; }
+  .progress-steps { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #888; }
+  .progress-steps span { transition: color 0.2s; }
+  .progress-steps span.active { color: #4f46e5; font-weight: 600; }
+  .progress-bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #4f46e5; border-radius: 3px; transition: width 0.3s ease; }
+
+  /* Form elements */
+  label { display: block; font-size: 13px; font-weight: 500; color: #555; margin-bottom: 5px; margin-top: 14px; }
+  input[type="text"], input[type="url"], input[type="email"], select {
+    width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 14px; color: #1a1a2e; outline: none; transition: border-color 0.15s;
+  }
+  input:focus, select:focus { border-color: #4f46e5; }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row > * { flex: 1; }
+  .row > .btn-sm { flex: 0 0 auto; }
+
+  /* Buttons */
+  .btn { padding: 10px 22px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-secondary { background: #e5e7eb; color: #333; }
+  .btn-secondary:hover { background: #d1d5db; }
+  .btn-sm { padding: 9px 16px; font-size: 13px; }
+  .btn-launch { background: #059669; color: #fff; font-size: 16px; padding: 12px 32px; }
+  .btn-launch:hover { background: #047857; }
+  .btn-launch:disabled { background: #9ca3af; cursor: not-allowed; }
+  .nav-buttons { display: flex; justify-content: space-between; margin-top: 28px; }
+
+  /* Toggle switches */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-label { font-size: 14px; font-weight: 500; }
+  .toggle-desc { font-size: 12px; color: #888; margin-top: 2px; }
+  .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: #d1d5db; border-radius: 12px; cursor: pointer; transition: background 0.2s; }
+  .slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+  .switch input:checked + .slider { background: #4f46e5; }
+  .switch input:checked + .slider::before { transform: translateX(20px); }
+
+  /* Plan cards */
+  .plans { display: flex; gap: 16px; margin-top: 10px; }
+  .plan-card { flex: 1; border: 2px solid #e5e7eb; border-radius: 10px; padding: 20px; cursor: pointer; transition: border-color 0.15s; text-align: center; }
+  .plan-card.selected { border-color: #4f46e5; background: #f5f3ff; }
+  .plan-card h3 { font-size: 16px; margin-bottom: 4px; }
+  .plan-card .price { font-size: 28px; font-weight: 700; color: #4f46e5; }
+  .plan-card .period { font-size: 13px; color: #888; }
+  .promo-row { display: flex; gap: 10px; margin-top: 16px; align-items: flex-end; }
+  .billing-summary { background: #f9fafb; border-radius: 8px; padding: 16px; margin-top: 16px; font-size: 14px; }
+  .billing-summary .line { display: flex; justify-content: space-between; padding: 4px 0; }
+  .billing-summary .total { font-weight: 700; border-top: 1px solid #d1d5db; margin-top: 6px; padding-top: 8px; }
+
+  /* Invite list */
+  .invite-list { margin-top: 12px; }
+  .invite-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+  .invite-item .remove { color: #ef4444; cursor: pointer; font-weight: 600; }
+
+  /* Summary */
+  .summary-section { margin-bottom: 16px; }
+  .summary-section h3 { font-size: 14px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-section p { font-size: 14px; line-height: 1.6; }
+  .launch-counter { margin-top: 12px; font-size: 13px; color: #ef4444; font-weight: 500; }
+  .step { display: none; }
+  .step.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="wizard">
+  <h1>LaunchPad — Startup Onboarding</h1>
+
+  <div class="progress-container">
+    <div class="progress-steps">
+      <span id="ps-1" class="active">Company</span>
+      <span id="ps-2">Team</span>
+      <span id="ps-3">Integrations</span>
+      <span id="ps-4">Billing</span>
+      <span id="ps-5">Launch</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width:20%"></div>
+    </div>
+  </div>
+
+  <!-- Step 1: Company Profile -->
+  <div class="step active" id="step-1">
+    <h2>Company Profile</h2>
+    <label for="companyName">Company Name</label>
+    <input type="text" id="companyName" placeholder="Acme Inc.">
+
+    <label for="industry">Industry</label>
+    <select id="industry">
+      <option value="">Select industry...</option>
+      <option value="Tech">Tech</option>
+      <option value="FinTech">FinTech</option>
+      <option value="Healthcare">Healthcare</option>
+      <option value="Education">Education</option>
+    </select>
+
+    <label for="companySize">Company Size</label>
+    <select id="companySize">
+      <option value="">Select size...</option>
+      <option value="1-10">1-10</option>
+      <option value="11-50">11-50</option>
+      <option value="51-200">51-200</option>
+      <option value="201+">201+</option>
+    </select>
+
+    <label for="website">Website URL</label>
+    <input type="url" id="website" placeholder="https://example.com">
+
+    <div class="nav-buttons">
+      <div></div>
+      <button class="btn btn-primary" onclick="goToStep(2)">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Team -->
+  <div class="step" id="step-2">
+    <h2>Invite Team Members</h2>
+    <div class="row">
+      <div>
+        <label for="inviteEmail">Email</label>
+        <input type="email" id="inviteEmail" placeholder="colleague@company.com">
+      </div>
+      <div>
+        <label for="inviteRole">Role</label>
+        <select id="inviteRole">
+          <option value="Admin">Admin</option>
+          <option value="Editor">Editor</option>
+          <option value="Viewer">Viewer</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-bottom:1px" onclick="addInvite()">Add</button>
+    </div>
+    <div class="invite-list" id="inviteList"></div>
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" onclick="goToStep(1)">Back</button>
+      <button class="btn btn-primary" onclick="goToStep(3)">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Integrations -->
+  <div class="step" id="step-3">
+    <h2>Connect Integrations</h2>
+    <div id="integrationsList">
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Slack</div>
+          <div class="toggle-desc">Send notifications to your Slack channels</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="int-slack"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">GitHub</div>
+          <div class="toggle-desc">Sync repos and pull request activity</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="int-github"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Jira</div>
+          <div class="toggle-desc">Import and sync project boards</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="int-jira"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row" id="auditLogRow">
+        <div>
+          <div class="toggle-label">Audit Log</div>
+          <!-- BUG #3: This description should change to compliance-specific text
+               when FinTech is selected, but it always shows the generic webhook text -->
+          <div class="toggle-desc" id="auditLogDesc">Forward events via generic webhooks</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="int-audit"><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" onclick="goToStep(2)">Back</button>
+      <button class="btn btn-primary" onclick="goToStep(4)">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Billing -->
+  <div class="step" id="step-4">
+    <h2>Choose Your Plan</h2>
+    <div class="plans">
+      <div class="plan-card" id="plan-starter" onclick="selectPlan('starter')">
+        <h3>Starter</h3>
+        <div class="price">$49</div>
+        <div class="period">/month</div>
+      </div>
+      <div class="plan-card" id="plan-growth" onclick="selectPlan('growth')">
+        <h3>Growth</h3>
+        <div class="price">$149</div>
+        <div class="period">/month</div>
+      </div>
+    </div>
+    <div class="promo-row">
+      <div style="flex:1">
+        <label for="promoCode">Promo Code</label>
+        <input type="text" id="promoCode" placeholder="Enter code...">
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-bottom:1px" onclick="applyPromo()">Apply</button>
+    </div>
+    <div class="billing-summary" id="billingSummary" style="display:none">
+      <div class="line"><span>Plan</span><span id="bsPlan">—</span></div>
+      <div class="line" id="bsDiscountRow" style="display:none"><span>Discount (20%)</span><span id="bsDiscount">—</span></div>
+      <div class="line total"><span>Total</span><span id="bsTotal">—</span></div>
+    </div>
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" onclick="goToStep(3)">Back</button>
+      <button class="btn btn-primary" onclick="goToStep(5)">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 5: Summary & Launch -->
+  <div class="step" id="step-5">
+    <h2>Review &amp; Launch</h2>
+    <div id="summaryContent"></div>
+    <div style="text-align:center; margin-top: 24px;">
+      <button class="btn btn-launch" id="launchBtn" onclick="launchWorkspace()">Launch Workspace</button>
+      <div class="launch-counter" id="launchCounter"></div>
+    </div>
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" onclick="goToStep(4)">Back</button>
+      <div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── State ───
+  let currentStep = 1;
+  let invites = [];
+  let savedInvites = [];       // BUG #2: only first 2 invites are persisted here
+  let selectedPlan = null;
+  let promoApplied = false;
+  let discountedTotal = null;
+  let launchCount = 0;
+
+  // BUG #1: wrong progress percentages
+  const stepProgress = { 1: 20, 2: 60, 3: 60, 4: 80, 5: 80 };
+  // Correct would be:  { 1: 20, 2: 40, 3: 60, 4: 80, 5: 100 }
+
+  // ─── Navigation ───
+  function goToStep(step) {
+    // Save current step state before leaving
+    if (currentStep === 2) {
+      // BUG #2: Only save first 2 invites when leaving Step 2
+      savedInvites = invites.slice(0, 2);
+    }
+
+    document.getElementById('step-' + currentStep).classList.remove('active');
+    currentStep = step;
+    document.getElementById('step-' + currentStep).classList.add('active');
+
+    // Update progress bar
+    document.getElementById('progressFill').style.width = stepProgress[step] + '%';
+    for (let i = 1; i <= 5; i++) {
+      const el = document.getElementById('ps-' + i);
+      el.classList.toggle('active', i <= step);
+    }
+
+    // Render step-specific content
+    if (step === 2) renderInvites();
+    if (step === 3) renderIntegrations();
+    if (step === 4) updateBilling();
+    if (step === 5) renderSummary();
+  }
+
+  // ─── Step 2: Invites ───
+  function addInvite() {
+    const email = document.getElementById('inviteEmail').value.trim();
+    const role = document.getElementById('inviteRole').value;
+    if (!email) return;
+    invites.push({ email, role });
+    document.getElementById('inviteEmail').value = '';
+    renderInviteList();
+  }
+
+  function removeInvite(index) {
+    invites.splice(index, 1);
+    renderInviteList();
+  }
+
+  function renderInviteList() {
+    const list = document.getElementById('inviteList');
+    list.innerHTML = invites.map((inv, i) =>
+      '<div class="invite-item"><span>' + inv.email + ' — ' + inv.role + '</span>' +
+      '<span class="remove" onclick="removeInvite(' + i + ')">Remove</span></div>'
+    ).join('');
+  }
+
+  function renderInvites() {
+    // BUG #2: When returning to Step 2, restore only savedInvites (max 2)
+    // This silently drops any 3rd+ invite added before navigating away
+    if (savedInvites.length > 0) {
+      invites = [...savedInvites];
+    }
+    // BUG #6: Role dropdown never updates based on industry
+    // When Healthcare is selected, "Compliance Officer" role should appear but doesn't
+    renderInviteList();
+  }
+
+  // ─── Step 3: Integrations ───
+  function renderIntegrations() {
+    // BUG #3: This should check the industry and update Audit Log description
+    // for FinTech, but the conditional logic is never executed.
+    // The description always remains "Forward events via generic webhooks"
+    // instead of showing "SOC2-compliant audit trail with tamper-proof logging"
+    var industry = document.getElementById('industry').value;
+    // Missing: if (industry === 'FinTech') { ... update auditLogDesc ... }
+  }
+
+  // ─── Step 4: Billing ───
+  function selectPlan(plan) {
+    selectedPlan = plan;
+    document.getElementById('plan-starter').classList.toggle('selected', plan === 'starter');
+    document.getElementById('plan-growth').classList.toggle('selected', plan === 'growth');
+    updateBilling();
+  }
+
+  function applyPromo() {
+    const code = document.getElementById('promoCode').value.trim().toUpperCase();
+    if (code === 'LAUNCH20' && selectedPlan) {
+      promoApplied = true;
+      updateBilling();
+    }
+  }
+
+  function updateBilling() {
+    if (!selectedPlan) {
+      document.getElementById('billingSummary').style.display = 'none';
+      return;
+    }
+    const prices = { starter: 49, growth: 149 };
+    const price = prices[selectedPlan];
+    const planLabel = selectedPlan === 'starter' ? 'Starter' : 'Growth';
+
+    document.getElementById('bsPlan').textContent = planLabel + ' — $' + price.toFixed(2);
+    document.getElementById('billingSummary').style.display = 'block';
+
+    if (promoApplied) {
+      const discount = price * 0.20;
+      discountedTotal = price - discount;
+      document.getElementById('bsDiscountRow').style.display = 'flex';
+      document.getElementById('bsDiscount').textContent = '-$' + discount.toFixed(2);
+      document.getElementById('bsTotal').textContent = '$' + discountedTotal.toFixed(2);
+    } else {
+      discountedTotal = null;
+      document.getElementById('bsDiscountRow').style.display = 'none';
+      document.getElementById('bsTotal').textContent = '$' + price.toFixed(2);
+    }
+  }
+
+  // ─── Step 5: Summary ───
+  function renderSummary() {
+    const company = document.getElementById('companyName').value || '(not set)';
+    const industry = document.getElementById('industry').value || '(not set)';
+    const size = document.getElementById('companySize').value || '(not set)';
+    const website = document.getElementById('website').value || '(not set)';
+
+    const integrations = [];
+    if (document.getElementById('int-slack').checked) integrations.push('Slack');
+    if (document.getElementById('int-github').checked) integrations.push('GitHub');
+    if (document.getElementById('int-jira').checked) integrations.push('Jira');
+    if (document.getElementById('int-audit').checked) integrations.push('Audit Log');
+
+    const prices = { starter: 49, growth: 149 };
+    const planLabel = selectedPlan ? (selectedPlan === 'starter' ? 'Starter' : 'Growth') : '(none)';
+
+    // BUG #5: Always use the base price, ignoring any applied discount
+    // discountedTotal is available but intentionally not used here
+    const displayPrice = selectedPlan ? '$' + prices[selectedPlan].toFixed(2) + '/mo' : '—';
+
+    let invitesHtml = invites.length > 0
+      ? invites.map(inv => inv.email + ' (' + inv.role + ')').join('<br>')
+      : '<em>No team members invited</em>';
+
+    document.getElementById('summaryContent').innerHTML =
+      '<div class="summary-section"><h3>Company</h3><p>' +
+        company + ' — ' + industry + ' — ' + size + '<br>' + website + '</p></div>' +
+      '<div class="summary-section"><h3>Team</h3><p>' + invitesHtml + '</p></div>' +
+      '<div class="summary-section"><h3>Integrations</h3><p>' +
+        (integrations.length > 0 ? integrations.join(', ') : '<em>None enabled</em>') + '</p></div>' +
+      '<div class="summary-section"><h3>Billing</h3><p>' + planLabel + ' — ' + displayPrice + '</p></div>';
+
+    // Reset launch state for this visit
+    launchCount = 0;
+    document.getElementById('launchCounter').textContent = '';
+    document.getElementById('launchBtn').disabled = false;
+  }
+
+  // ─── Launch ───
+  function launchWorkspace() {
+    // BUG #4: Button is NOT disabled immediately on click.
+    // It only disables after a 500ms delay, so rapid clicks get through.
+    launchCount++;
+    document.getElementById('launchCounter').textContent =
+      'Launch triggered ' + launchCount + ' time' + (launchCount > 1 ? 's' : '') + '.';
+
+    setTimeout(function() {
+      document.getElementById('launchBtn').disabled = true;
+    }, 500);
+  }
+</script>
+
+</body>
+</html>

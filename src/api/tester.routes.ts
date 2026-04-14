@@ -8,7 +8,7 @@ import { S3Service } from '../services/s3.service.js';
 import { TestCaseService } from '../services/test-case.service.js';
 import { TesterModel } from '../models/tester.js';
 import { TesterInviteModel } from '../models/tester-invite.js';
-import { DEFAULT_ASSESSMENT_CONFIG, DEFAULT_ASSESSMENT_STEPS } from '../services/sandbox-scoring.service.js';
+import { pickRandomAssessment } from '../services/sandbox-scoring.service.js';
 import { Errors } from '../lib/errors.js';
 import { generateInviteCode } from '../lib/invite-code.js';
 import sql from '../lib/db.js';
@@ -642,16 +642,19 @@ export async function testerRoutes(app: FastifyInstance) {
       return { assessment_task_id: existing.id };
     }
 
+    // Pick a random assessment from the catalog
+    const assessment = pickRandomAssessment();
+
     // Create assessment test case and assign directly to the tester
     const task = await TestCaseModel.create({
       builder_id: SYSTEM_BUILDER_ID,
-      title: 'Onboarding Assessment: Acme Shop Checkout',
-      description: 'Test this checkout page and report any bugs you find. This assessment determines your readiness to take real testing tasks.',
-      url: '/sandbox/index.html',
-      steps: DEFAULT_ASSESSMENT_STEPS,
+      title: assessment.title,
+      description: assessment.description,
+      url: assessment.sandbox_url,
+      steps: assessment.steps,
       environment: 'sandbox',
-      tags: ['assessment'],
-      metadata: {},
+      tags: ['assessment', assessment.id, assessment.difficulty],
+      metadata: { assessment_id: assessment.id, difficulty: assessment.difficulty },
       status_history: [
         { status: 'queued', at: new Date().toISOString() },
         { status: 'assigned', at: new Date().toISOString() },
@@ -665,7 +668,7 @@ export async function testerRoutes(app: FastifyInstance) {
           type = 'onboarding_assessment',
           assigned_tester_id = ${tester.id},
           assigned_at = NOW(),
-          assessment_config = ${sql.json(DEFAULT_ASSESSMENT_CONFIG as never)}
+          assessment_config = ${sql.json(assessment.config as never)}
       WHERE id = ${task.id}
     `;
 
