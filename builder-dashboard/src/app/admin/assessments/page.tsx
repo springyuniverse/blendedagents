@@ -122,6 +122,7 @@ function AssessmentCard({ a, onClick }: { a: AssessmentSummary; onClick: () => v
 }
 
 function DetailView({ id, onBack }: { id: string; onBack: () => void }) {
+  const [showPreview, setShowPreview] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ['admin-assessment-detail', id],
     queryFn: () => getAssessmentDetail(id),
@@ -149,10 +150,52 @@ function DetailView({ id, onBack }: { id: string; onBack: () => void }) {
           <h1 className="text-xl font-bold text-text-primary tracking-tight">{a.title.replace('Onboarding Assessment: ', '')}</h1>
           <p className="text-sm text-text-muted mt-0.5">{a.description}</p>
         </div>
+        <button
+          onClick={() => setShowPreview(!showPreview)}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors border ${
+            showPreview
+              ? 'bg-accent-admin/10 text-accent-admin border-accent-admin/20'
+              : 'border-border text-text-secondary hover:bg-surface-secondary'
+          }`}
+        >
+          <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
+          {showPreview ? 'Hide Preview' : 'Preview Sandbox'}
+        </button>
         <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${DIFFICULTY_COLORS[a.difficulty] || ''}`}>
           {DIFFICULTY_LABELS[a.difficulty] || a.difficulty}
         </span>
       </div>
+
+      {/* Sandbox Preview */}
+      {showPreview && (
+        <div className="bg-surface border border-border rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <Eye className="w-4 h-4 text-accent-admin" strokeWidth={1.5} />
+              Sandbox Preview
+            </h2>
+            <div className="flex items-center gap-2">
+              <code className="text-[11px] px-2 py-0.5 bg-surface-secondary rounded font-mono text-text-muted">{a.sandbox_url}</code>
+              <a
+                href={a.sandbox_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-accent-admin hover:underline"
+              >
+                Open in new tab
+              </a>
+            </div>
+          </div>
+          <div className="bg-white" style={{ height: '600px' }}>
+            <iframe
+              src={a.sandbox_url}
+              title={`Sandbox: ${a.title}`}
+              className="w-full h-full border-0"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-6 gap-3">
