@@ -18,6 +18,7 @@ import { adminRoutes } from './api/admin.routes.js';
 import { WebhookService, WEBHOOK_JOB } from './services/webhook.service.js';
 import { ApiError } from './lib/errors.js';
 import sql from './lib/db.js';
+import { seedEmailTemplates } from './lib/email.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -193,6 +194,7 @@ async function start() {
     await app.listen({ port: PORT, host: HOST });
     app.log.info(`Server listening on ${HOST}:${PORT}`);
 
+    await seedEmailTemplates().catch(err => app.log.error(err, 'Failed to seed email templates'));
     await startWorkers(app.log);
   } catch (err) {
     app.log.error(err);

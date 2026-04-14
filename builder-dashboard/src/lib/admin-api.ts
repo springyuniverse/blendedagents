@@ -379,3 +379,46 @@ export function getAdminTransactions(params?: { page?: number; limit?: number; t
   const qs = query.toString();
   return request<AdminTransactionsResponse>(`/transactions${qs ? `?${qs}` : ''}`);
 }
+
+// ---- Email Templates ----
+
+export interface EmailTemplate {
+  name: string;
+  subject: string;
+  html_content: string;
+  description: string;
+  category: string;
+  variables: string[];
+  html_length?: number;
+  updated_at: string;
+}
+
+export interface EmailTemplatesResponse {
+  templates: EmailTemplate[];
+}
+
+export function getEmailTemplates() {
+  return request<EmailTemplatesResponse>('/email-templates');
+}
+
+export function getEmailTemplate(name: string) {
+  return request<EmailTemplate>(`/email-templates/${name}`);
+}
+
+export function updateEmailTemplate(name: string, data: { subject?: string; html_content?: string }) {
+  return request<EmailTemplate>(`/email-templates/${name}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export function previewEmailTemplate(name: string) {
+  return request<{ html: string }>(`/email-templates/${name}/preview`, { method: 'POST' });
+}
+
+export function sendTestEmail(name: string, to: string) {
+  return request<{ ok: boolean; sent_to: string }>(`/email-templates/${name}/send-test`, {
+    method: 'POST',
+    body: JSON.stringify({ to }),
+  });
+}

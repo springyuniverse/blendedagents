@@ -1,7 +1,8 @@
 import { Resend } from 'resend';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import sql from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, '../../email-templates');
@@ -11,8 +12,22 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_ADDRESS = process.env.EMAIL_FROM || 'BlendedAgents <noreply@blendedagents.com>';
 const APP_URL = process.env.APP_URL || 'https://blendedagents.com';
 
+/** Load template: DB first, filesystem fallback */
 function loadTemplate(name: string, vars: Record<string, string>): string {
+  // Synchronous filesystem load (DB override handled in loadTemplateAsync)
   let html = readFileSync(resolve(TEMPLATES_DIR, `${name}.html`), 'utf-8');
+  for (const [key, value] of Object.entries(vars)) {
+    html = html.replaceAll(`{{${key}}}`, value);
+  }
+  return html;
+}
+
+/** Async template load — checks DB first, falls back to filesystem */
+async function loadTemplateAsync(name: string, vars: Record<string, string>): Promise<string> {
+  const [row] = await sql<{ html_content: string }[]>`
+    SELECT html_content FROM email_templates WHERE name = ${name}
+  `;
+  let html = row?.html_content ?? readFileSync(resolve(TEMPLATES_DIR, `${name}.html`), 'utf-8');
   for (const [key, value] of Object.entries(vars)) {
     html = html.replaceAll(`{{${key}}}`, value);
   }
@@ -35,7 +50,7 @@ export const EmailService = {
   // ── Builder Emails ──────────────────────────────────────────────
 
   async sendBuilderWelcome(to: string, displayName: string, creditsBalance: number) {
-    const html = loadTemplate('builder-welcome', {
+    const html = await loadTemplateAsync('builder-welcome', {
       DISPLAY_NAME: displayName || 'there',
       CREDITS_BALANCE: String(creditsBalance),
       DASHBOARD_URL: `${APP_URL}/builder`,
@@ -46,7 +61,7 @@ export const EmailService = {
   },
 
   async sendCreditPurchase(to: string, creditsPurchased: number, currencyAmount: string, creditsBalance: number) {
-    const html = loadTemplate('credit-purchase', {
+    const html = await loadTemplateAsync('credit-purchase', {
       CREDITS_PURCHASED: String(creditsPurchased),
       CURRENCY_AMOUNT: currencyAmount,
       CREDITS_BALANCE: String(creditsBalance),
@@ -56,7 +71,7 @@ export const EmailService = {
   },
 
   async sendCreditsLow(to: string, creditsBalance: number) {
-    const html = loadTemplate('credits-low', {
+    const html = await loadTemplateAsync('credits-low', {
       CREDITS_BALANCE: String(creditsBalance),
       TOPUP_URL: `${APP_URL}/builder/credits`,
     });
@@ -67,7 +82,7 @@ export const EmailService = {
     to: string,
     test: { title: string; shortId: string; verdict: string; stepsPassed: number; stepsTotal: number; durationMinutes: number; recordingUrl?: string | null },
   ) {
-    let html = loadTemplate('test-results-ready', {
+    let html = await loadTemplateAsync('test-results-ready', {
       TEST_TITLE: test.title,
       TEST_CASE_ID: test.shortId,
       TEST_VERDICT: test.verdict,
@@ -90,7 +105,7 @@ export const EmailService = {
     to: string,
     test: { title: string; shortId: string; webhookUrl: string; retryCount: number; lastError: string },
   ) {
-    const html = loadTemplate('webhook-failed', {
+    const html = await loadTemplateAsync('webhook-failed', {
       TEST_TITLE: test.title,
       TEST_CASE_ID: test.shortId,
       WEBHOOK_URL: test.webhookUrl,
@@ -102,7 +117,7 @@ export const EmailService = {
   },
 
   async sendTestExpired(to: string, test: { title: string; shortId: string; creditsRefunded: number }) {
-    const html = loadTemplate('test-expired', {
+    const html = await loadTemplateAsync('test-expired', {
       TEST_TITLE: test.title,
       TEST_CASE_ID: test.shortId,
       CREDITS_REFUNDED: String(test.creditsRefunded),
@@ -112,7 +127,7 @@ export const EmailService = {
   },
 
   async sendPaymentFailed(to: string, currencyAmount: string) {
-    const html = loadTemplate('payment-failed', {
+    const html = await loadTemplateAsync('payment-failed', {
       CURRENCY_AMOUNT: currencyAmount,
       TOPUP_URL: `${APP_URL}/builder/credits`,
     });
@@ -122,7 +137,7 @@ export const EmailService = {
   // ── Tester Emails ───────────────────────────────────────────────
 
   async sendTesterWelcome(to: string, displayName: string, inviteCode: string) {
-    const html = loadTemplate('tester-welcome', {
+    const html = await loadTemplateAsync('tester-welcome', {
       DISPLAY_NAME: displayName || 'there',
       INVITE_CODE: inviteCode,
       DASHBOARD_URL: `${APP_URL}/tester`,
@@ -131,7 +146,7 @@ export const EmailService = {
   },
 
   async sendAssessmentResults(to: string, displayName: string, grade: string, passed: boolean) {
-    let html = loadTemplate('assessment-results', {
+    let html = await loadTemplateAsync('assessment-results', {
       DISPLAY_NAME: displayName || 'there',
       ASSESSMENT_GRADE: grade,
       DASHBOARD_URL: `${APP_URL}/tester`,
@@ -141,7 +156,7 @@ export const EmailService = {
   },
 
   async sendTesterAccepted(to: string, displayName: string) {
-    const html = loadTemplate('tester-accepted', {
+    const html = await loadTemplateAsync('tester-accepted', {
       DISPLAY_NAME: displayName || 'there',
       DASHBOARD_URL: `${APP_URL}/tester`,
     });
@@ -149,14 +164,14 @@ export const EmailService = {
   },
 
   async sendTesterDeactivated(to: string, supportEmail: string) {
-    const html = loadTemplate('tester-deactivated', {
+    const html = await loadTemplateAsync('tester-deactivated', {
       SUPPORT_EMAIL: supportEmail || 'support@blendedagents.com',
     });
     await send(to, 'Your BlendedAgents account has been paused', html);
   },
 
   async sendTaskAssigned(to: string, task: { title: string; templateType: string; stepCount: number; acceptanceDeadline: string; taskUrl: string }) {
-    const html = loadTemplate('task-assigned', {
+    const html = await loadTemplateAsync('task-assigned', {
       TASK_TITLE: task.title,
       TEMPLATE_TYPE: task.templateType,
       STEP_COUNT: String(task.stepCount),
@@ -167,7 +182,7 @@ export const EmailService = {
   },
 
   async sendTestReassigned(to: string, task: { title: string; templateType: string; stepCount: number; taskUrl: string }) {
-    const html = loadTemplate('test-reassigned', {
+    const html = await loadTemplateAsync('test-reassigned', {
       TASK_TITLE: task.title,
       TEMPLATE_TYPE: task.templateType,
       STEP_COUNT: String(task.stepCount),
@@ -177,7 +192,7 @@ export const EmailService = {
   },
 
   async sendTaskCompleted(to: string, displayName: string, task: { title: string; verdict: string; payoutAmount: string; totalEarnings: string }) {
-    const html = loadTemplate('task-completed', {
+    const html = await loadTemplateAsync('task-completed', {
       DISPLAY_NAME: displayName || 'there',
       TASK_TITLE: task.title,
       VERDICT: task.verdict,
@@ -189,7 +204,7 @@ export const EmailService = {
   },
 
   async sendWeeklyPayout(to: string, payout: { periodStart: string; periodEnd: string; tasksCompleted: number; payoutAmount: string; totalEarnings: string }) {
-    const html = loadTemplate('weekly-payout', {
+    const html = await loadTemplateAsync('weekly-payout', {
       PERIOD_START: payout.periodStart,
       PERIOD_END: payout.periodEnd,
       TASKS_COMPLETED: String(payout.tasksCompleted),
@@ -201,7 +216,7 @@ export const EmailService = {
   },
 
   async sendReferralUsed(to: string, inviteCode: string, usedInvites: number, maxInvites: number) {
-    const html = loadTemplate('referral-used', {
+    const html = await loadTemplateAsync('referral-used', {
       INVITE_CODE: inviteCode,
       USED_INVITES: String(usedInvites),
       MAX_INVITES: String(maxInvites),
@@ -211,7 +226,7 @@ export const EmailService = {
   },
 
   async sendPayoutCompleted(to: string, payout: { periodStart: string; periodEnd: string; tasksCompleted: number; payoutAmount: string }) {
-    const html = loadTemplate('payout-completed', {
+    const html = await loadTemplateAsync('payout-completed', {
       PERIOD_START: payout.periodStart,
       PERIOD_END: payout.periodEnd,
       TASKS_COMPLETED: String(payout.tasksCompleted),
@@ -220,4 +235,50 @@ export const EmailService = {
     });
     await send(to, `Payout complete — ${payout.payoutAmount} sent`, html);
   },
+
+  /** Send a test email with sample variables filled in */
+  async sendTestEmail(to: string, templateName: string, subject: string, htmlContent: string) {
+    await resend.emails.send({ from: FROM_ADDRESS, to, subject: `[TEST] ${subject}`, html: htmlContent });
+  },
 };
+
+// ── Template metadata for seeding ───────────────────────────────
+
+const TEMPLATE_META: Record<string, { subject: string; description: string; category: string; variables: string[] }> = {
+  'builder-welcome': { subject: 'Welcome to BlendedAgents', description: 'Sent to new builders after signup', category: 'builder', variables: ['DISPLAY_NAME', 'CREDITS_BALANCE', 'DASHBOARD_URL', 'SKILL_MD_URL', 'TWEET_FOR_CREDITS_URL'] },
+  'credit-purchase': { subject: 'Credits added to your account', description: 'Sent after successful credit purchase', category: 'builder', variables: ['CREDITS_PURCHASED', 'CURRENCY_AMOUNT', 'CREDITS_BALANCE', 'DASHBOARD_URL'] },
+  'credits-low': { subject: 'Your credit balance is running low', description: 'Sent when builder credits drop below threshold', category: 'builder', variables: ['CREDITS_BALANCE', 'TOPUP_URL'] },
+  'test-results-ready': { subject: 'Results ready for your test', description: 'Sent when a tester completes a test case', category: 'builder', variables: ['TEST_TITLE', 'TEST_CASE_ID', 'TEST_VERDICT', 'STEPS_PASSED', 'STEPS_TOTAL', 'DURATION_MINUTES', 'RESULTS_URL', 'RECORDING_URL'] },
+  'webhook-failed': { subject: 'Webhook delivery failed', description: 'Sent when webhook delivery exhausts all retries', category: 'builder', variables: ['TEST_TITLE', 'TEST_CASE_ID', 'WEBHOOK_URL', 'RETRY_COUNT', 'LAST_ERROR', 'RESULTS_URL'] },
+  'test-expired': { subject: 'Test expired', description: 'Sent when a test case expires without completion', category: 'builder', variables: ['TEST_TITLE', 'TEST_CASE_ID', 'CREDITS_REFUNDED', 'DASHBOARD_URL'] },
+  'payment-failed': { subject: 'Payment failed — action required', description: 'Sent when a Stripe payment fails', category: 'builder', variables: ['CURRENCY_AMOUNT', 'TOPUP_URL'] },
+  'tester-welcome': { subject: "Welcome to BlendedAgents — let's get you started", description: 'Sent to new testers after signup', category: 'tester', variables: ['DISPLAY_NAME', 'INVITE_CODE', 'DASHBOARD_URL'] },
+  'assessment-results': { subject: 'Your assessment results are in', description: 'Sent after assessment is graded', category: 'tester', variables: ['DISPLAY_NAME', 'ASSESSMENT_GRADE', 'DASHBOARD_URL'] },
+  'tester-accepted': { subject: "You're in! Welcome to BlendedAgents", description: 'Sent when admin activates a tester', category: 'tester', variables: ['DISPLAY_NAME', 'DASHBOARD_URL'] },
+  'tester-deactivated': { subject: 'Your BlendedAgents account has been paused', description: 'Sent when admin deactivates a tester', category: 'tester', variables: ['SUPPORT_EMAIL'] },
+  'task-assigned': { subject: 'New task assigned', description: 'Sent when a test is assigned to a tester', category: 'tester', variables: ['TASK_TITLE', 'TEMPLATE_TYPE', 'STEP_COUNT', 'ACCEPTANCE_DEADLINE', 'TASK_URL'] },
+  'test-reassigned': { subject: 'New task assigned', description: 'Sent when a test is reassigned to a different tester', category: 'tester', variables: ['TASK_TITLE', 'TEMPLATE_TYPE', 'STEP_COUNT', 'TASK_URL'] },
+  'task-completed': { subject: 'Task complete — earnings added', description: 'Sent to tester when their submission is accepted', category: 'tester', variables: ['DISPLAY_NAME', 'TASK_TITLE', 'VERDICT', 'PAYOUT_AMOUNT', 'TOTAL_EARNINGS', 'EARNINGS_URL'] },
+  'weekly-payout': { subject: 'Your weekly earnings summary', description: 'Weekly earnings summary for testers', category: 'tester', variables: ['PERIOD_START', 'PERIOD_END', 'TASKS_COMPLETED', 'PAYOUT_AMOUNT', 'TOTAL_EARNINGS', 'EARNINGS_URL'] },
+  'referral-used': { subject: 'Someone used your invite code', description: 'Sent when a referral code is redeemed', category: 'tester', variables: ['INVITE_CODE', 'USED_INVITES', 'MAX_INVITES', 'REFERRALS_URL'] },
+  'payout-completed': { subject: 'Payout complete — funds sent', description: 'Sent when a payout is processed via Stripe', category: 'tester', variables: ['PERIOD_START', 'PERIOD_END', 'TASKS_COMPLETED', 'PAYOUT_AMOUNT', 'EARNINGS_URL'] },
+};
+
+/** Seed email_templates table from filesystem if empty */
+export async function seedEmailTemplates(): Promise<void> {
+  const [{ count }] = await sql<{ count: string }[]>`SELECT count(*)::text FROM email_templates`;
+  if (parseInt(count) > 0) return;
+
+  const files = readdirSync(TEMPLATES_DIR).filter(f => f.endsWith('.html'));
+  for (const file of files) {
+    const name = file.replace('.html', '');
+    const meta = TEMPLATE_META[name];
+    if (!meta) continue; // skip auth templates (confirm-signup, etc.)
+    const htmlContent = readFileSync(resolve(TEMPLATES_DIR, file), 'utf-8');
+    await sql`
+      INSERT INTO email_templates (name, subject, html_content, description, category, variables)
+      VALUES (${name}, ${meta.subject}, ${htmlContent}, ${meta.description}, ${meta.category}, ${meta.variables})
+      ON CONFLICT (name) DO NOTHING
+    `;
+  }
+}

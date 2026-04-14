@@ -11,6 +11,7 @@ import {
   UserCheck,
   ClipboardList,
   DollarSign,
+  Mail,
   Settings,
   LogOut,
   Shield,
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/admin/testers', label: 'Testers', icon: UserCheck },
   { href: '/admin/test-cases', label: 'Test Cases', icon: ClipboardList },
   { href: '/admin/financials', label: 'Financials', icon: DollarSign },
+  { href: '/admin/email-templates', label: 'Emails', icon: Mail },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 

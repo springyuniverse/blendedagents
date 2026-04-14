@@ -562,4 +562,156 @@ export async function adminRoutes(app: FastifyInstance) {
       total_pages: Math.ceil(parseInt(count, 10) / limit),
     };
   });
+
+  // ── Email Templates ──────────────────────────────────────────
+
+  // GET /api/v1/admin/email-templates — list all templates
+  app.get('/email-templates', async () => {
+    const templates = await sql`
+      SELECT name, subject, description, category, variables, updated_at,
+        length(html_content) AS html_length
+      FROM email_templates
+      ORDER BY category, name
+    `;
+    return { templates };
+  });
+
+  // GET /api/v1/admin/email-templates/:name — get single template with HTML
+  app.get('/email-templates/:name', async (request: FastifyRequest<{ Params: { name: string } }>) => {
+    const { name } = request.params;
+    const [template] = await sql`
+      SELECT * FROM email_templates WHERE name = ${name}
+    `;
+    if (!template) throw Errors.notFound('Template not found');
+    return template;
+  });
+
+  // PUT /api/v1/admin/email-templates/:name — update template
+  app.put('/email-templates/:name', async (request: FastifyRequest<{
+    Params: { name: string };
+    Body: { subject?: string; html_content?: string };
+  }>) => {
+    const { name } = request.params;
+    const body = request.body as { subject?: string; html_content?: string };
+
+    const updates: Record<string, unknown> = {};
+    if (typeof body.subject === 'string') updates.subject = body.subject;
+    if (typeof body.html_content === 'string') updates.html_content = body.html_content;
+
+    if (Object.keys(updates).length === 0) throw Errors.badRequest('No fields to update');
+
+    // Build dynamic update
+    const setClauses: string[] = ['updated_at = now()'];
+    if (updates.subject) setClauses.push('subject');
+    if (updates.html_content) setClauses.push('html_content');
+
+    let updated;
+    if (updates.subject && updates.html_content) {
+      [updated] = await sql`
+        UPDATE email_templates
+        SET subject = ${updates.subject as string}, html_content = ${updates.html_content as string}, updated_at = now()
+        WHERE name = ${name} RETURNING *
+      `;
+    } else if (updates.subject) {
+      [updated] = await sql`
+        UPDATE email_templates
+        SET subject = ${updates.subject as string}, updated_at = now()
+        WHERE name = ${name} RETURNING *
+      `;
+    } else {
+      [updated] = await sql`
+        UPDATE email_templates
+        SET html_content = ${updates.html_content as string}, updated_at = now()
+        WHERE name = ${name} RETURNING *
+      `;
+    }
+    if (!updated) throw Errors.notFound('Template not found');
+    return updated;
+  });
+
+  // POST /api/v1/admin/email-templates/:name/preview — render with sample variables
+  app.post('/email-templates/:name/preview', async (request: FastifyRequest<{ Params: { name: string } }>) => {
+    const { name } = request.params;
+    const [template] = await sql<{ html_content: string; variables: string[] }[]>`
+      SELECT html_content, variables FROM email_templates WHERE name = ${name}
+    `;
+    if (!template) throw Errors.notFound('Template not found');
+
+    let html = template.html_content;
+    // Fill variables with sample values
+    for (const v of template.variables) {
+      html = html.replaceAll(`{{${v}}}`, sampleValue(v));
+    }
+    // Show all conditional blocks in preview
+    html = html.replace(/<!--\s*IF:(\w+)\s*-->/g, '').replace(/<!--\s*ENDIF:(\w+)\s*-->/g, '');
+    return { html };
+  });
+
+  // POST /api/v1/admin/email-templates/:name/send-test — send test email to admin
+  app.post('/email-templates/:name/send-test', async (request: FastifyRequest<{
+    Params: { name: string };
+    Body: { to: string };
+  }>) => {
+    const { name } = request.params;
+    const { to } = request.body as { to: string };
+    if (!to) throw Errors.badRequest('Recipient email required');
+
+    const [template] = await sql<{ html_content: string; subject: string; variables: string[] }[]>`
+      SELECT html_content, subject, variables FROM email_templates WHERE name = ${name}
+    `;
+    if (!template) throw Errors.notFound('Template not found');
+
+    let html = template.html_content;
+    for (const v of template.variables) {
+      html = html.replaceAll(`{{${v}}}`, sampleValue(v));
+    }
+    html = html.replace(/<!--\s*IF:(\w+)\s*-->/g, '').replace(/<!--\s*ENDIF:(\w+)\s*-->/g, '');
+
+    await EmailService.sendTestEmail(to, name, template.subject, html);
+    return { ok: true, sent_to: to };
+  });
+}
+
+function sampleValue(variable: string): string {
+  const samples: Record<string, string> = {
+    DISPLAY_NAME: 'Jane',
+    CREDITS_BALANCE: '150',
+    CREDITS_PURCHASED: '100',
+    CREDITS_REFUNDED: '13',
+    CURRENCY_AMOUNT: '$10.00',
+    DASHBOARD_URL: 'https://blendedagents.com/builder',
+    SKILL_MD_URL: 'https://blendedagents.com/skill.md',
+    TWEET_FOR_CREDITS_URL: 'https://blendedagents.com/builder/credits',
+    TOPUP_URL: 'https://blendedagents.com/builder/credits',
+    RESULTS_URL: 'https://blendedagents.com/builder/test-cases/abc123',
+    EARNINGS_URL: 'https://blendedagents.com/tester/earnings',
+    REFERRALS_URL: 'https://blendedagents.com/tester/referrals',
+    TASK_URL: 'https://blendedagents.com/tester/tasks/abc123',
+    RECORDING_URL: 'https://blendedagents.com/recordings/abc123',
+    TEST_TITLE: 'Login Flow Verification',
+    TEST_CASE_ID: 'TC-001',
+    TEST_VERDICT: 'pass',
+    STEPS_PASSED: '4',
+    STEPS_TOTAL: '5',
+    DURATION_MINUTES: '12',
+    WEBHOOK_URL: 'https://example.com/webhook',
+    RETRY_COUNT: '3',
+    LAST_ERROR: 'Connection timeout',
+    TASK_TITLE: 'Login Flow Verification',
+    TEMPLATE_TYPE: 'flow_test',
+    STEP_COUNT: '5',
+    ACCEPTANCE_DEADLINE: 'April 15, 2026 at 10:00 AM',
+    VERDICT: 'pass',
+    PAYOUT_AMOUNT: '$4.50',
+    TOTAL_EARNINGS: '$127.50',
+    INVITE_CODE: 'BA-DEMO1234',
+    USED_INVITES: '3',
+    MAX_INVITES: '5',
+    PERIOD_START: 'April 7, 2026',
+    PERIOD_END: 'April 13, 2026',
+    TASKS_COMPLETED: '8',
+    ASSESSMENT_GRADE: 'A (92%)',
+    SUPPORT_EMAIL: 'support@blendedagents.com',
+  };
+  return samples[variable] || `[${variable}]`;
 }
