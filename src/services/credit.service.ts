@@ -5,6 +5,9 @@ import { CreditRateConfigModel } from '../models/credit-rate-config.js';
 import { calculatePayout, type PayoutInput } from './payout.service.js';
 import { calculateCommission } from './commission.service.js';
 import { Errors } from '../lib/errors.js';
+import { EmailService } from '../lib/email.js';
+
+const LOW_CREDITS_THRESHOLD = 20;
 
 // Flow test pricing: 3 base + 2 per step
 const FLOW_BASE_COST = 3;
@@ -39,16 +42,19 @@ export const CreditService = {
     testCaseId: string,
     creditAmount: number,
   ): Promise<CreditBalance> {
-    return sql.begin(async (tx) => {
+    let balanceBefore = 0;
+
+    const updated = await sql.begin(async (tx) => {
       // Lock the balance row to prevent concurrent modification
       const balance = await CreditBalanceModel.getForUpdate(builderId, tx);
+      balanceBefore = balance.available_credits;
 
       if (balance.available_credits < creditAmount) {
         throw Errors.insufficientCredits(balance.available_credits, creditAmount);
       }
 
       // Reserve credits atomically
-      const updated = await CreditBalanceModel.reserve(builderId, creditAmount, tx);
+      const reserved = await CreditBalanceModel.reserve(builderId, creditAmount, tx);
 
       // Get current rate for currency conversion
       const rate = await CreditRateConfigModel.getCurrentRate();
@@ -66,8 +72,21 @@ export const CreditService = {
         idempotency_key: `reserve:${testCaseId}`,
       }, tx);
 
-      return updated;
+      return reserved;
     });
+
+    // Send low-balance warning if the builder just crossed the threshold
+    if (balanceBefore >= LOW_CREDITS_THRESHOLD && updated.available_credits < LOW_CREDITS_THRESHOLD) {
+      sql<{ email: string }[]>`
+        SELECT email FROM builders WHERE id = ${builderId}
+      `.then(([row]) => {
+        if (row?.email) {
+          return EmailService.sendCreditsLow(row.email, updated.available_credits);
+        }
+      }).catch(err => console.error('Failed to send credits-low email', err));
+    }
+
+    return updated;
   },
 
   async deductCredits(

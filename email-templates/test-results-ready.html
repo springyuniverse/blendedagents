@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Results ready for "{{TEST_TITLE}}"</title>
+  <style>
+    @media only screen and (max-width: 520px) {
+      .email-card { width: 100% !important; }
+      .email-body { padding: 24px 20px !important; }
+      .email-header { padding: 24px 20px 20px !important; }
+      .email-footer { padding: 16px 20px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#faf9fb;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#faf9fb;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" class="email-card" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #dbd6e1;border-radius:12px;overflow:hidden;">
+
+          <!-- ============ HEADER ============ -->
+          <tr>
+            <td class="email-header" style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #ece8f0;">
+              <div style="display:inline-block;width:44px;height:44px;background-color:#2ba185;border-radius:10px;line-height:44px;text-align:center;margin-bottom:12px;">
+                <span style="color:#ffffff;font-size:20px;font-weight:700;">B</span>
+              </div>
+              <h1 style="margin:0;font-size:18px;font-weight:700;color:#1d1127;letter-spacing:-0.02em;">
+                BlendedAgents
+              </h1>
+            </td>
+          </tr>
+
+          <!-- ============ BODY ============ -->
+          <tr>
+            <td class="email-body" style="padding:32px;">
+
+              <!-- Heading -->
+              <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1d1127;">
+                Your test results are in
+              </h2>
+
+              <!-- Test title + ID -->
+              <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#645574;">
+                {{TEST_TITLE}} ({{TEST_CASE_ID}})
+              </p>
+
+              <!-- Verdict badge -->
+              <!-- IF:VERDICT_PASS -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#edf9f5;border:1px solid #b3e6d6;border-radius:8px;padding:16px;text-align:center;">
+                    <span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.5;border-radius:4px;background-color:#edf9f5;color:#1a7a60;">
+                      {{TEST_VERDICT}}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+              <!-- ENDIF:VERDICT_PASS -->
+
+              <!-- IF:VERDICT_FAIL -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#fdf2f2;border:1px solid #f5b8b8;border-radius:8px;padding:16px;text-align:center;">
+                    <span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.5;border-radius:4px;background-color:#fdf2f2;color:#a33b3b;">
+                      {{TEST_VERDICT}}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+              <!-- ENDIF:VERDICT_FAIL -->
+
+              <!-- IF:VERDICT_PARTIAL -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#fef9ec;border:1px solid #f5dfa0;border-radius:8px;padding:16px;text-align:center;">
+                    <span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.5;border-radius:4px;background-color:#fef9ec;color:#8a6d1b;">
+                      {{TEST_VERDICT}}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+              <!-- ENDIF:VERDICT_PARTIAL -->
+
+              <!-- Stats data rows -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="padding:8px 0;font-size:13px;color:#9c8fb0;width:140px;vertical-align:top;border-bottom:1px solid #ece8f0;">
+                    Steps passed
+                  </td>
+                  <td style="padding:8px 0;font-size:13px;font-weight:600;color:#1d1127;vertical-align:top;border-bottom:1px solid #ece8f0;">
+                    {{STEPS_PASSED}}/{{STEPS_TOTAL}}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;font-size:13px;color:#9c8fb0;width:140px;vertical-align:top;">
+                    Duration
+                  </td>
+                  <td style="padding:8px 0;font-size:13px;font-weight:600;color:#1d1127;vertical-align:top;">
+                    {{DURATION_MINUTES}} min
+                  </td>
+                </tr>
+              </table>
+
+              <!-- IF:VERDICT_FAIL -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#fdf2f2;border:1px solid #f5b8b8;border-radius:8px;padding:16px;">
+                    <p style="margin:0;font-size:13px;line-height:1.6;color:#a33b3b;">
+                      A human tester found issues your automated tests would miss. Review the results and screen recording.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              <!-- ENDIF:VERDICT_FAIL -->
+
+              <!-- Primary CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#2ba185;border-radius:8px;">
+                    <a href="{{RESULTS_URL}}" target="_blank"
+                       style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+                      View Results
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- IF:HAS_SCREEN_RECORDING -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="border:1px solid #dbd6e1;border-radius:8px;">
+                    <a href="{{RECORDING_URL}}" target="_blank"
+                       style="display:inline-block;padding:11px 28px;font-size:14px;font-weight:600;color:#1d1127;text-decoration:none;">
+                      Watch Recording
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <!-- ENDIF:HAS_SCREEN_RECORDING -->
+
+              <!-- Fallback URL -->
+              <p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#9c8fb0;">
+                If the button doesn't work, copy and paste this link into your browser:
+              </p>
+              <p style="margin:0;font-size:12px;line-height:1.5;color:#9c8fb0;word-break:break-all;">
+                {{RESULTS_URL}}
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- ============ FOOTER ============ -->
+          <tr>
+            <td class="email-footer" style="padding:20px 32px;border-top:1px solid #ece8f0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9c8fb0;">
+                You received this email because a test you submitted on BlendedAgents has been completed.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

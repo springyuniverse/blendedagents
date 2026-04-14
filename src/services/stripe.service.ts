@@ -1,6 +1,7 @@
 import { stripe, verifyWebhookSignature } from '../lib/stripe.js';
 import { CreditBalanceModel } from '../models/credit-balance.js';
 import { CreditService } from './credit.service.js';
+import { EmailService } from '../lib/email.js';
 import { Errors } from '../lib/errors.js';
 import sql from '../lib/db.js';
 import type Stripe from 'stripe';
@@ -121,6 +122,10 @@ export const StripeService = {
         await handleCheckoutExpired(event.data.object as Stripe.Checkout.Session);
         return { processed: true, event_type: event.type };
 
+      case 'payment_intent.payment_failed':
+        await handlePaymentFailed(event.data.object as Stripe.PaymentIntent);
+        return { processed: true, event_type: event.type };
+
       default:
         return { processed: false, event_type: event.type };
     }
@@ -153,7 +158,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   await CreditBalanceModel.ensureExists(builderId);
 
-  await CreditService.topupCredits(
+  const updatedBalance = await CreditService.topupCredits(
     builderId,
     credits,
     amountCents,
@@ -162,12 +167,54 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   );
 
   pendingSessions.delete(builderId);
+
+  // Fire-and-forget credit purchase confirmation email
+  const [builderRow] = await sql<{ email: string }[]>`
+    SELECT email FROM builders WHERE id = ${builderId}
+  `;
+  if (builderRow?.email) {
+    const formattedAmount = `$${(amountCents / 100).toFixed(2)}`;
+    EmailService.sendCreditPurchase(
+      builderRow.email,
+      credits,
+      formattedAmount,
+      updatedBalance.available_credits,
+    ).catch(err => console.error('Failed to send credit purchase email', err));
+  }
 }
 
 async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   const builderId = session.metadata?.builder_id;
   if (builderId) {
     pendingSessions.delete(builderId);
+  }
+}
+
+async function handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
+  const amountCents = paymentIntent.amount;
+  const formattedAmount = `$${(amountCents / 100).toFixed(2)}`;
+
+  // Try to get the customer email from the PaymentIntent receipt_email,
+  // or fall back to looking up the Stripe customer
+  let customerEmail = paymentIntent.receipt_email;
+
+  if (!customerEmail && paymentIntent.customer) {
+    const customerId = typeof paymentIntent.customer === 'string'
+      ? paymentIntent.customer
+      : paymentIntent.customer.id;
+    const customer = await stripe.customers.retrieve(customerId);
+    if (!customer.deleted) {
+      customerEmail = customer.email;
+    }
+  }
+
+  if (customerEmail) {
+    EmailService.sendPaymentFailed(customerEmail, formattedAmount)
+      .catch(err => console.error('Failed to send payment failed email', err));
+  } else {
+    console.warn('payment_intent.payment_failed: no customer email found', {
+      payment_intent_id: paymentIntent.id,
+    });
   }
 }
 

@@ -6,6 +6,7 @@ import { WebhookDeliveryModel } from '../models/webhook-delivery.js';
 import { formatSignatureHeader } from '../lib/webhook-signing.js';
 import { generateMachineSummary, type MachineSummary } from './summary.service.js';
 import { getJobManager } from '../lib/jobs.js';
+import { EmailService } from '../lib/email.js';
 
 const APP_BASE_URL = process.env.APP_BASE_URL || 'https://app.blendedagents.com';
 
@@ -235,6 +236,20 @@ export const WebhookService = {
 
     if (canRetry) {
       await this.scheduleRetry(deliveryId, testCaseId, attemptNumber);
+    } else {
+      // All retries exhausted — notify the builder via email (fire-and-forget)
+      TestCaseModel.findById(testCaseId).then(async (tc) => {
+        if (!tc) return;
+        const builder = await BuilderModel.findById(tc.builder_id);
+        if (!builder?.email) return;
+        EmailService.sendWebhookFailed(builder.email, {
+          title: tc.title,
+          shortId: tc.short_id,
+          webhookUrl: builder.webhook_url ?? '',
+          retryCount: attemptNumber,
+          lastError: responseBody ?? `HTTP ${statusCode}`,
+        }).catch((err) => console.error('[webhook] failed to send webhook-failed email:', err));
+      }).catch((err) => console.error('[webhook] failed to look up test case for failure email:', err));
     }
   },
 

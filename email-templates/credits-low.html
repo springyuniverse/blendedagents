@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your credit balance is running low</title>
+  <style>
+    @media only screen and (max-width: 520px) {
+      .email-card { width: 100% !important; }
+      .email-body { padding: 24px 20px !important; }
+      .email-header { padding: 24px 20px 20px !important; }
+      .email-footer { padding: 16px 20px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#faf9fb;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#faf9fb;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" class="email-card" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #dbd6e1;border-radius:12px;overflow:hidden;">
+
+          <!-- Header -->
+          <tr>
+            <td class="email-header" style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #ece8f0;">
+              <div style="display:inline-block;width:44px;height:44px;background-color:#2ba185;border-radius:10px;line-height:44px;text-align:center;margin-bottom:12px;">
+                <span style="color:#ffffff;font-size:20px;font-weight:700;">B</span>
+              </div>
+              <h1 style="margin:0;font-size:18px;font-weight:700;color:#1d1127;letter-spacing:-0.02em;">
+                BlendedAgents
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td class="email-body" style="padding:32px;">
+
+              <!-- Heading -->
+              <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1d1127;">
+                Your credit balance is running low
+              </h2>
+
+              <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#645574;">
+                Your next test may require more credits than you have available. Top up now to avoid interruptions.
+              </p>
+
+              <!-- Warning info box -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#fef9ec;border:1px solid #f5dfa0;border-radius:8px;padding:16px;">
+                    <p style="margin:0;font-size:13px;line-height:1.6;color:#8a6d1b;">
+                      You have <strong>{{CREDITS_BALANCE}}</strong> credits remaining.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#645574;">
+                Volume discounts are available when you purchase larger credit packs. Visit the top-up page to see pricing options.
+              </p>
+
+              <!-- Primary CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#2ba185;border-radius:8px;">
+                    <a href="{{TOPUP_URL}}" target="_blank"
+                       style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+                      Top Up Credits
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Fallback URL -->
+              <p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#9c8fb0;">
+                If the button doesn't work, copy and paste this link into your browser:
+              </p>
+              <p style="margin:0;font-size:12px;line-height:1.5;color:#9c8fb0;word-break:break-all;">
+                {{TOPUP_URL}}
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="email-footer" style="padding:20px 32px;border-top:1px solid #ece8f0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9c8fb0;">
+                You received this email because your credit balance on BlendedAgents dropped below the minimum threshold after a test charge.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

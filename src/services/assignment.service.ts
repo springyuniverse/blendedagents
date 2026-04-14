@@ -1,6 +1,7 @@
 import sql from '../lib/db.js';
 import { TestCaseModel } from '../models/test-case.js';
 import { TesterModel } from '../models/tester.js';
+import { BuilderModel } from '../models/builder.js';
 import { StepResultModel } from '../models/step-result.js';
 import { TestResultModel } from '../models/test-result.js';
 import { FindingModel } from '../models/finding.js';
@@ -9,7 +10,10 @@ import { CreditService, calculateCreditCost, REVIEW_BASE_COST, calculateReviewBo
 import { gradeAssessment, type AssessmentConfig } from './sandbox-scoring.service.js';
 import { getJobManager } from '../lib/jobs.js';
 import { Errors } from '../lib/errors.js';
+import { EmailService } from '../lib/email.js';
 import type { Tester } from '../models/tester.js';
+
+const APP_URL = process.env.APP_URL || 'https://blendedagents.com';
 
 export const AssignmentService = {
   /**
@@ -67,6 +71,28 @@ export const AssignmentService = {
     } catch {
       // Non-fatal — timeout can be handled manually
     }
+
+    // Fire-and-forget: send task-assigned email to the tester
+    (async () => {
+      try {
+        const [tester, testCase] = await Promise.all([
+          TesterModel.findById(testerId),
+          TestCaseModel.findById(testCaseId),
+        ]);
+        if (tester?.email && testCase) {
+          const acceptanceDeadline = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+          await EmailService.sendTaskAssigned(tester.email, {
+            title: testCase.title,
+            templateType: testCase.template_type,
+            stepCount: testCase.steps.length,
+            acceptanceDeadline,
+            taskUrl: `${APP_URL}/tester/tasks/${testCase.short_id}`,
+          });
+        }
+      } catch (err) {
+        console.error('[email] Failed to send task-assigned email:', err);
+      }
+    })();
   },
 
   /**
@@ -149,6 +175,22 @@ export const AssignmentService = {
       ? REVIEW_BASE_COST
       : calculateCreditCost(testCase.steps.length);
     await CreditService.refundCredits(testCase.builder_id, testCaseId, creditCost);
+
+    // Fire-and-forget: send test-expired email to the builder
+    (async () => {
+      try {
+        const builder = await BuilderModel.findById(testCase.builder_id);
+        if (builder?.email) {
+          await EmailService.sendTestExpired(builder.email, {
+            title: testCase.title,
+            shortId: testCase.short_id,
+            creditsRefunded: creditCost,
+          });
+        }
+      } catch (err) {
+        console.error('[email] Failed to send test-expired email:', err);
+      }
+    })();
   },
 
   /**
@@ -294,6 +336,19 @@ export const AssignmentService = {
       // Admin reviews scores and decides whether to activate (is_active).
       await TesterModel.update(testerId, { onboarded: true });
 
+      // Fire-and-forget: send assessment results email to tester
+      (async () => {
+        try {
+          const tester = await TesterModel.findById(testerId);
+          if (tester?.email) {
+            const gradeLabel = `${grade.detection_score}% detection, ${grade.clarity_score}% clarity`;
+            await EmailService.sendAssessmentResults(tester.email, tester.display_name, gradeLabel, grade.passed);
+          }
+        } catch (err) {
+          console.error('[email] Failed to send assessment-results email:', err);
+        }
+      })();
+
       // Skip credit settlement for assessment tasks
       await sql`
         UPDATE testers
@@ -330,6 +385,48 @@ export const AssignmentService = {
         steps_count: testCase.steps.length,
       },
     });
+
+    // Fire-and-forget: send test-results-ready email to the builder
+    const durationMinutes = testCase.started_at
+      ? Math.round((Date.now() - new Date(testCase.started_at).getTime()) / 60000 * 100) / 100
+      : 0;
+    (async () => {
+      try {
+        const builder = await BuilderModel.findById(testCase.builder_id);
+        if (builder?.email) {
+          await EmailService.sendTestResultsReady(builder.email, {
+            title: testCase.title,
+            shortId: testCase.short_id,
+            verdict: results.verdict,
+            stepsPassed,
+            stepsTotal: testCase.steps.length,
+            durationMinutes,
+            recordingUrl: results.recording_url,
+          });
+        }
+      } catch (err) {
+        console.error('[email] Failed to send test-results-ready email:', err);
+      }
+    })();
+
+    // Fire-and-forget: send task-completed email to the tester
+    (async () => {
+      try {
+        const freshTester = await TesterModel.findById(testerId);
+        if (freshTester?.email) {
+          const payoutCents = (regionalRate?.base_pay_cents ?? 100) +
+            (regionalRate?.per_step_rate_cents ?? 25) * testCase.steps.length;
+          await EmailService.sendTaskCompleted(freshTester.email, freshTester.display_name, {
+            title: testCase.title,
+            verdict: results.verdict,
+            payoutAmount: `$${(payoutCents / 100).toFixed(2)}`,
+            totalEarnings: `$${((freshTester.earnings_cents + payoutCents) / 100).toFixed(2)}`,
+          });
+        }
+      } catch (err) {
+        console.error('[email] Failed to send task-completed email:', err);
+      }
+    })();
   },
 
   /**
@@ -434,6 +531,46 @@ export const AssignmentService = {
         steps_count: results.findings.length,
       },
     });
+
+    // Fire-and-forget: send test-results-ready email to the builder
+    const durationMinutes = testCase.started_at
+      ? Math.round((Date.now() - new Date(testCase.started_at).getTime()) / 60000 * 100) / 100
+      : 0;
+    (async () => {
+      try {
+        const builder = await BuilderModel.findById(testCase.builder_id);
+        if (builder?.email) {
+          await EmailService.sendTestResultsReady(builder.email, {
+            title: testCase.title,
+            shortId: testCase.short_id,
+            verdict: results.verdict,
+            stepsPassed: 0,
+            stepsTotal: 0,
+            durationMinutes,
+          });
+        }
+      } catch (err) {
+        console.error('[email] Failed to send test-results-ready email:', err);
+      }
+    })();
+
+    // Fire-and-forget: send task-completed email to the tester
+    (async () => {
+      try {
+        if (tester?.email) {
+          const payoutCents = (regionalRate?.base_pay_cents ?? 100) +
+            (regionalRate?.per_step_rate_cents ?? 25) * results.findings.length;
+          await EmailService.sendTaskCompleted(tester.email, tester.display_name, {
+            title: testCase.title,
+            verdict: results.verdict,
+            payoutAmount: `$${(payoutCents / 100).toFixed(2)}`,
+            totalEarnings: `$${((tester.earnings_cents + payoutCents) / 100).toFixed(2)}`,
+          });
+        }
+      } catch (err) {
+        console.error('[email] Failed to send task-completed email:', err);
+      }
+    })();
   },
 
   /**

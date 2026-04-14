@@ -272,6 +272,14 @@ export async function adminRoutes(app: FastifyInstance) {
       wasPreviouslyInactive = !!existing && !existing.is_active;
     }
 
+    // Check if this is a deactivation (is_active flipping to false)
+    const isDeactivating = body.is_active === false;
+    let wasPreviouslyActive = false;
+    if (isDeactivating) {
+      const existing = await TesterModel.findById(id);
+      wasPreviouslyActive = !!existing && existing.is_active;
+    }
+
     const [updated] = await sql`
       UPDATE testers SET ${sql(updates)}, updated_at = now()
       WHERE id = ${id}
@@ -282,6 +290,13 @@ export async function adminRoutes(app: FastifyInstance) {
     if (wasPreviouslyInactive && updated?.email) {
       EmailService.sendTesterAccepted(updated.email, updated.display_name).catch((err) => {
         request.log.error({ err, testerId: id }, 'Failed to send tester acceptance email');
+      });
+    }
+
+    // Send deactivation email when tester is newly deactivated
+    if (wasPreviouslyActive && updated?.email) {
+      EmailService.sendTesterDeactivated(updated.email, 'support@blendedagents.com').catch((err) => {
+        request.log.error({ err, testerId: id }, 'Failed to send tester deactivation email');
       });
     }
 
@@ -497,6 +512,20 @@ export async function adminRoutes(app: FastifyInstance) {
     await AssignmentService.adminReassign(id, tester_id, reason);
 
     const [updated] = await sql`SELECT * FROM test_cases WHERE id = ${id}`;
+
+    // Send reassignment email to the new tester
+    if (tester.email && updated) {
+      const stepCount = Array.isArray(updated.steps) ? updated.steps.length : 0;
+      EmailService.sendTestReassigned(tester.email, {
+        title: updated.title,
+        templateType: updated.template_type,
+        stepCount,
+        taskUrl: `${process.env.APP_URL || 'https://blendedagents.com'}/tester/tasks/${updated.id}`,
+      }).catch((err) => {
+        request.log.error({ err, testCaseId: id, testerId: tester_id }, 'Failed to send test reassigned email');
+      });
+    }
+
     return updated;
   });
 

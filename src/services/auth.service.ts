@@ -5,6 +5,7 @@ import type { Tester } from '../models/tester.js';
 import { TesterInviteModel } from '../models/tester-invite.js';
 import { PlatformSettingsModel } from '../models/platform-settings.js';
 import { Errors } from '../lib/errors.js';
+import { EmailService } from '../lib/email.js';
 
 // Simple in-memory LRU cache for API key lookups
 const cache = new Map<string, { builder: Builder; cachedAt: number }>();
@@ -97,6 +98,11 @@ export const AuthService = {
       ON CONFLICT (builder_id) DO NOTHING
     `;
 
+    // Send builder welcome email (fire-and-forget)
+    EmailService.sendBuilderWelcome(created.email, created.display_name, 0).catch(err =>
+      console.error('Failed to send builder welcome email', err),
+    );
+
     return created;
   },
 
@@ -155,8 +161,25 @@ export const AuthService = {
 
     // Redeem the invite code if one was provided
     if (inviteCode) {
-      await TesterInviteModel.redeem(inviteCode, created.id);
+      const redeemedInvite = await TesterInviteModel.redeem(inviteCode, created.id);
+
+      // Notify the inviter that their code was used (fire-and-forget)
+      if (redeemedInvite) {
+        (async () => {
+          const [inviter] = await sql<Tester[]>`
+            SELECT * FROM testers WHERE id = ${redeemedInvite.inviter_id}
+          `;
+          if (!inviter) return;
+          const usedCount = await TesterInviteModel.countByInviter(inviter.id);
+          await EmailService.sendReferralUsed(inviter.email, inviteCode, usedCount, inviter.max_invites);
+        })().catch(err => console.error('Failed to send referral used email', err));
+      }
     }
+
+    // Send tester welcome email (fire-and-forget)
+    EmailService.sendTesterWelcome(created.email, created.display_name, inviteCode || '').catch(err =>
+      console.error('Failed to send tester welcome email', err),
+    );
 
     return created;
   },

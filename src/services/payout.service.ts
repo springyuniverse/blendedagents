@@ -1,5 +1,14 @@
 import sql from '../lib/db.js';
 import { TesterPayoutModel } from '../models/tester-payout.js';
+import { EmailService } from '../lib/email.js';
+
+function formatCentsAsUSD(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 export interface PayoutInput {
   base_pay_cents: number;
@@ -32,6 +41,20 @@ export const PayoutService = {
         status: 'pending',
       });
       recordsCreated++;
+
+      // Send weekly payout summary email (fire-and-forget)
+      const [tester] = await sql<{ email: string; earnings_cents: number }[]>`
+        SELECT email, earnings_cents FROM testers WHERE id = ${agg.tester_id}
+      `;
+      if (tester?.email) {
+        EmailService.sendWeeklyPayout(tester.email, {
+          periodStart: formatDate(weekStart),
+          periodEnd: formatDate(now),
+          tasksCompleted: agg.transaction_count,
+          payoutAmount: formatCentsAsUSD(agg.total_earnings_cents),
+          totalEarnings: formatCentsAsUSD(tester.earnings_cents),
+        }).catch(err => console.error(`Failed to send weekly payout email to ${tester.email}:`, err));
+      }
     }
 
     return recordsCreated;
