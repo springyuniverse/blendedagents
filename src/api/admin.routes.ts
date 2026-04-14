@@ -7,6 +7,7 @@ import { Errors } from '../lib/errors.js';
 import sql from '../lib/db.js';
 import { S3Service } from '../services/s3.service.js';
 import { EmailService } from '../lib/email.js';
+import { ASSESSMENT_CATALOG } from '../services/sandbox-scoring.service.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   await adminAuthPlugin(app);
@@ -669,6 +670,108 @@ export async function adminRoutes(app: FastifyInstance) {
 
     await EmailService.sendTestEmail(to, name, template.subject, html);
     return { ok: true, sent_to: to };
+  });
+
+  // ── Assessments Catalog ────────────────────────────────────────
+
+  // GET /api/v1/admin/assessments — list all assessments with stats
+  app.get('/assessments', async () => {
+    // Get stats per assessment_id from test_cases metadata
+    const stats = await sql<{
+      assessment_id: string;
+      total: string;
+      completed: string;
+      passed: string;
+      avg_detection: string;
+      avg_clarity: string;
+    }[]>`
+      SELECT
+        tc.metadata->>'assessment_id' AS assessment_id,
+        count(*)::text AS total,
+        count(*) FILTER (WHERE tc.status = 'completed')::text AS completed,
+        count(*) FILTER (WHERE (tc.assessment_config->'grade'->>'passed')::boolean = true)::text AS passed,
+        COALESCE(AVG((tc.assessment_config->'grade'->>'detection_score')::numeric) FILTER (WHERE tc.assessment_config->'grade' IS NOT NULL), 0)::numeric(4,2)::text AS avg_detection,
+        COALESCE(AVG((tc.assessment_config->'grade'->>'clarity_score')::numeric) FILTER (WHERE tc.assessment_config->'grade' IS NOT NULL), 0)::numeric(4,2)::text AS avg_clarity
+      FROM test_cases tc
+      WHERE tc.type = 'onboarding_assessment'
+      GROUP BY tc.metadata->>'assessment_id'
+    `;
+
+    // Also count legacy assessments (no assessment_id in metadata)
+    const [legacy] = await sql<{
+      total: string; completed: string; passed: string; avg_detection: string; avg_clarity: string;
+    }[]>`
+      SELECT
+        count(*)::text AS total,
+        count(*) FILTER (WHERE tc.status = 'completed')::text AS completed,
+        count(*) FILTER (WHERE (tc.assessment_config->'grade'->>'passed')::boolean = true)::text AS passed,
+        COALESCE(AVG((tc.assessment_config->'grade'->>'detection_score')::numeric) FILTER (WHERE tc.assessment_config->'grade' IS NOT NULL), 0)::numeric(4,2)::text AS avg_detection,
+        COALESCE(AVG((tc.assessment_config->'grade'->>'clarity_score')::numeric) FILTER (WHERE tc.assessment_config->'grade' IS NOT NULL), 0)::numeric(4,2)::text AS avg_clarity
+      FROM test_cases tc
+      WHERE tc.type = 'onboarding_assessment' AND (tc.metadata->>'assessment_id') IS NULL
+    `;
+
+    const statsMap = new Map(stats.map(s => [s.assessment_id, s]));
+    // Map legacy stats to acme-shop
+    if (legacy && parseInt(legacy.total) > 0 && !statsMap.has('acme-shop')) {
+      statsMap.set('acme-shop', { assessment_id: 'acme-shop', ...legacy });
+    }
+
+    const assessments = ASSESSMENT_CATALOG.map(a => {
+      const s = statsMap.get(a.id);
+      return {
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        difficulty: a.difficulty,
+        sandbox_url: a.sandbox_url,
+        bug_count: a.config.planted_issues.length,
+        pass_detection: a.config.pass_detection,
+        pass_clarity: a.config.pass_clarity,
+        categories: a.config.planted_issues.map(i => i.category),
+        steps_count: a.steps.length,
+        stats: {
+          total_assigned: parseInt(s?.total || '0'),
+          total_completed: parseInt(s?.completed || '0'),
+          total_passed: parseInt(s?.passed || '0'),
+          pass_rate: parseInt(s?.completed || '0') > 0
+            ? Math.round((parseInt(s?.passed || '0') / parseInt(s?.completed || '0')) * 100)
+            : 0,
+          avg_detection: parseFloat(s?.avg_detection || '0'),
+          avg_clarity: parseFloat(s?.avg_clarity || '0'),
+        },
+      };
+    });
+
+    return { assessments };
+  });
+
+  // GET /api/v1/admin/assessments/:id — get full assessment detail
+  app.get('/assessments/:id', async (request: FastifyRequest<{ Params: { id: string } }>) => {
+    const { id } = request.params;
+    const assessment = ASSESSMENT_CATALOG.find(a => a.id === id);
+    if (!assessment) throw Errors.notFound('Assessment not found');
+
+    // Get recent submissions for this assessment
+    const submissions = await sql`
+      SELECT tc.id, tc.status, tc.created_at, tc.completed_at,
+        tc.assessment_config->'grade' AS grade,
+        t.display_name AS tester_name, t.email AS tester_email
+      FROM test_cases tc
+      LEFT JOIN testers t ON t.id = tc.assigned_tester_id
+      WHERE tc.type = 'onboarding_assessment'
+        AND (tc.metadata->>'assessment_id' = ${id}
+          OR (${id} = 'acme-shop' AND (tc.metadata->>'assessment_id') IS NULL))
+      ORDER BY tc.created_at DESC
+      LIMIT 20
+    `;
+
+    return {
+      ...assessment,
+      steps: assessment.steps,
+      config: assessment.config,
+      recent_submissions: submissions,
+    };
   });
 }
 

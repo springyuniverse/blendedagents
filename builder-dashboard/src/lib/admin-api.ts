@@ -422,3 +422,61 @@ export function sendTestEmail(name: string, to: string) {
     body: JSON.stringify({ to }),
   });
 }
+
+// ---- Assessments Catalog ----
+
+export interface AssessmentStats {
+  total_assigned: number;
+  total_completed: number;
+  total_passed: number;
+  pass_rate: number;
+  avg_detection: number;
+  avg_clarity: number;
+}
+
+export interface AssessmentSummary {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: string;
+  sandbox_url: string;
+  bug_count: number;
+  pass_detection: number;
+  pass_clarity: number;
+  categories: string[];
+  steps_count: number;
+  stats: AssessmentStats;
+}
+
+export interface PlantedIssue {
+  step_index: number;
+  category: string;
+  keywords: string[];
+  acceptable_severities: string[];
+}
+
+export interface AssessmentDetail extends AssessmentSummary {
+  steps: { instruction: string; expected: string }[];
+  config: {
+    planted_issues: PlantedIssue[];
+    pass_detection: number;
+    pass_clarity: number;
+  };
+  recent_submissions: {
+    id: string;
+    status: string;
+    created_at: string;
+    completed_at: string | null;
+    grade: { detection_score: number; clarity_score: number; passed: boolean } | null;
+    tester_name: string | null;
+    tester_email: string | null;
+  }[];
+}
+
+export function getAssessments() {
+  return request<{ assessments: AssessmentSummary[] }>('/assessments');
+}
+
+export function getAssessmentDetail(id: string) {
+  return request<AssessmentDetail>(`/assessments/${id}`);
+}
