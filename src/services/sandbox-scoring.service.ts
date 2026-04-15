@@ -334,8 +334,14 @@ export const ASSESSMENT_CATALOG: Assessment[] = [
   },
 ];
 
-/** Pick a random assessment from the catalog */
+/** Pick the default assessment (or a specific one by ID) */
 export function pickRandomAssessment(): Assessment {
+  // Default to InsightBoard Analytics; change to null for random selection
+  const defaultId = 'insight-board';
+  if (defaultId) {
+    const found = ASSESSMENT_CATALOG.find(a => a.id === defaultId);
+    if (found) return found;
+  }
   const idx = Math.floor(Math.random() * ASSESSMENT_CATALOG.length);
   return ASSESSMENT_CATALOG[idx];
 }
