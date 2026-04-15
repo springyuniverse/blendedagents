@@ -156,8 +156,8 @@ export async function adminRoutes(app: FastifyInstance) {
       sql<{ count: string }[]>`SELECT count(*)::text FROM builders b WHERE 1=1 ${searchFilter}`,
       sql`
         SELECT b.id, b.display_name, b.email, b.plan_tier, b.created_at, b.updated_at, b.last_login_at,
-          coalesce(cb.available, 0) AS credits_available,
-          coalesce(cb.reserved, 0) AS credits_reserved,
+          coalesce(cb.available_credits, 0) AS credits_available,
+          coalesce(cb.reserved_credits, 0) AS credits_reserved,
           (SELECT count(*) FROM test_cases tc WHERE tc.builder_id = b.id)::int AS test_count,
           (SELECT count(*) FROM api_keys ak WHERE ak.builder_id = b.id AND ak.revoked_at IS NULL)::int AS active_api_keys
         FROM builders b
