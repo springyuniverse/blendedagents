@@ -46,6 +46,9 @@ export async function testerAuthPlugin(app: FastifyInstance) {
 
     request.tester = tester;
 
+    // Update last_login_at (fire-and-forget)
+    sql`UPDATE testers SET last_login_at = now() WHERE id = ${tester.id}`.catch(() => {});
+
     // Set RLS context for tester
     await sql`SELECT set_config('app.current_tester_id', ${tester.id}, true)`;
   });

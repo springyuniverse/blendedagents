@@ -155,7 +155,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const [[{ count }], builders] = await Promise.all([
       sql<{ count: string }[]>`SELECT count(*)::text FROM builders b WHERE 1=1 ${searchFilter}`,
       sql`
-        SELECT b.id, b.display_name, b.email, b.plan_tier, b.created_at, b.updated_at,
+        SELECT b.id, b.display_name, b.email, b.plan_tier, b.created_at, b.updated_at, b.last_login_at,
           coalesce(cb.available, 0) AS credits_available,
           coalesce(cb.reserved, 0) AS credits_reserved,
           (SELECT count(*) FROM test_cases tc WHERE tc.builder_id = b.id)::int AS test_count,
@@ -219,7 +219,7 @@ export async function adminRoutes(app: FastifyInstance) {
       sql`
         SELECT t.id, t.display_name, t.email, t.region, t.skills, t.languages, t.devices,
           t.is_active, t.is_available, t.onboarded, t.tasks_completed, t.tasks_total,
-          t.avg_completion_minutes, t.earnings_cents, t.max_invites, t.timezone, t.created_at, t.updated_at
+          t.avg_completion_minutes, t.earnings_cents, t.max_invites, t.timezone, t.created_at, t.updated_at, t.last_login_at
         FROM testers t
         WHERE 1=1 ${searchFrag} ${statusFrag}
         ORDER BY t.created_at DESC

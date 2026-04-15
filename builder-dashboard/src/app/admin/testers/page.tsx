@@ -244,6 +244,7 @@ export default function AdminTestersPage() {
                   <th className="text-center text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Tasks</th>
                   <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Avg Time</th>
                   <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Earnings</th>
+                  <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Last Login</th>
                   <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Joined</th>
                   <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3"></th>
                 </tr>
@@ -278,6 +279,13 @@ export default function AdminTestersPage() {
                         {(t.earnings_cents / 100).toFixed(2)}
                       </div>
                     </td>
+                    <td className="px-5 py-3.5 text-right text-[13px] font-mono">
+                      {t.last_login_at ? (
+                        <span className="text-text-primary">{new Date(t.last_login_at).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+                      ) : (
+                        <span className="text-text-muted">Never</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5 text-right text-[13px] text-text-muted font-mono">
                       {new Date(t.created_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
@@ -303,7 +311,7 @@ export default function AdminTestersPage() {
                 ))}
                 {displayedTesters.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-5 py-12 text-center text-sm text-text-muted">
+                    <td colSpan={10} className="px-5 py-12 text-center text-sm text-text-muted">
                       {search || filters.length > 0 ? 'No testers match your filters.' : 'No testers yet.'}
                     </td>
                   </tr>

@@ -150,6 +150,7 @@ export default function AdminBuildersPage() {
                   <th className="text-center text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Tests</th>
                   <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Credits</th>
                   <th className="text-center text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">API Keys</th>
+                  <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Last Login</th>
                   <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3">Joined</th>
                   <th className="text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider px-5 py-3"></th>
                 </tr>
@@ -186,6 +187,13 @@ export default function AdminBuildersPage() {
                         <Key className="w-3.5 h-3.5 text-text-muted" strokeWidth={1.5} />{b.active_api_keys}
                       </div>
                     </td>
+                    <td className="px-5 py-3.5 text-right text-[13px] font-mono">
+                      {b.last_login_at ? (
+                        <span className="text-text-primary">{new Date(b.last_login_at).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+                      ) : (
+                        <span className="text-text-muted">Never</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5 text-right text-[13px] text-text-muted font-mono">
                       {new Date(b.created_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
@@ -199,7 +207,7 @@ export default function AdminBuildersPage() {
                 ))}
                 {displayedBuilders.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-sm text-text-muted">
+                    <td colSpan={8} className="px-5 py-12 text-center text-sm text-text-muted">
                       {search || filters.length > 0 ? 'No builders match your filters.' : 'No builders yet.'}
                     </td>
                   </tr>

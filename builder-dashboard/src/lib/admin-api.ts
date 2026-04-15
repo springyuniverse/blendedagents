@@ -115,6 +115,7 @@ export interface AdminBuilder {
   plan_tier: string;
   created_at: string;
   updated_at: string;
+  last_login_at: string | null;
   credits_available: number;
   credits_reserved: number;
   test_count: number;
@@ -166,6 +167,7 @@ export interface AdminTester {
   timezone: string | null;
   created_at: string;
   updated_at: string;
+  last_login_at: string | null;
 }
 
 export interface AdminTestersResponse {

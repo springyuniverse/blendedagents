@@ -55,6 +55,9 @@ export async function builderAuthPlugin(app: FastifyInstance) {
     // Decorate request with authenticated builder
     request.builder = builder;
 
+    // Update last_login_at (fire-and-forget)
+    sql`UPDATE builders SET last_login_at = now() WHERE id = ${builder.id}`.catch(() => {});
+
     // Set RLS context for this request's database queries
     await sql`SELECT set_config('app.current_builder_id', ${builder.id}, true)`;
   });
