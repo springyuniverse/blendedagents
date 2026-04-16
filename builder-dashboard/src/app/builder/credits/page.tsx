@@ -175,7 +175,11 @@ function TweetRewardCard() {
     onError: (err: Error) => setError(err.message),
   });
 
-  if (rewardStatus?.claimed) {
+  const reward = rewardStatus?.reward;
+  const status = reward?.status;
+
+  // Already approved
+  if (status === 'approved') {
     return (
       <div className="bg-surface border border-border rounded-lg p-5 flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-accent-flow/10 flex items-center justify-center flex-shrink-0">
@@ -183,18 +187,43 @@ function TweetRewardCard() {
         </div>
         <div>
           <p className="text-sm font-medium text-text-primary">Tweet reward claimed</p>
-          <p className="text-xs text-text-muted">{rewardStatus.reward?.credits_awarded} credits added to your account</p>
+          <p className="text-xs text-text-muted">{reward?.credits_awarded} credits added to your account</p>
         </div>
       </div>
     );
   }
 
+  // Pending admin review
+  if (status === 'pending') {
+    return (
+      <div className="bg-surface border border-amber-200 rounded-lg p-5 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-text-primary">Tweet submitted — awaiting admin review</p>
+          <p className="text-xs text-text-muted truncate">{reward?.tweet_url}</p>
+          <p className="text-[11px] text-text-muted mt-0.5">You&apos;ll get 25 credits once approved. Usually within 24 hours.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Rejected — show reason and allow resubmission
+  const wasRejected = status === 'rejected';
+
   return (
-    <div className="bg-surface border border-accent-flow/20 rounded-lg p-6">
+    <div className={`bg-surface border rounded-lg p-6 ${wasRejected ? 'border-red-200' : 'border-accent-flow/20'}`}>
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h2 className="text-base font-semibold text-text-primary">Earn 25 free credits</h2>
-          <p className="text-[13px] text-text-muted mt-0.5">Post about BlendedAgents on X and paste the link below</p>
+          <h2 className="text-base font-semibold text-text-primary">
+            {wasRejected ? 'Your previous submission was rejected' : 'Earn 25 free credits'}
+          </h2>
+          <p className="text-[13px] text-text-muted mt-0.5">
+            {wasRejected
+              ? reward?.rejection_reason || 'Post again about BlendedAgents on X and submit for review'
+              : 'Post about BlendedAgents on X — admin will review and award credits'}
+          </p>
         </div>
         <span className="text-xs font-mono text-accent-flow bg-accent-flow/10 px-2 py-1 rounded">+25 credits</span>
       </div>
@@ -211,7 +240,7 @@ function TweetRewardCard() {
           disabled={!tweetUrl || claimMutation.isPending}
           className="px-5 py-2.5 bg-accent-flow text-white text-sm font-semibold rounded-lg hover:bg-accent-flow/90 disabled:opacity-50 transition-all whitespace-nowrap"
         >
-          {claimMutation.isPending ? 'Claiming...' : 'Claim Credits'}
+          {claimMutation.isPending ? 'Submitting...' : 'Submit for Review'}
         </button>
       </div>
       {error && <p className="text-xs text-accent-danger mt-2">{error}</p>}

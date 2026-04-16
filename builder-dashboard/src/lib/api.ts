@@ -361,7 +361,13 @@ export function getTransactions(cursor?: string) {
 
 export interface TweetRewardStatus {
   claimed: boolean;
-  reward: { tweet_url: string; credits_awarded: number; created_at: string } | null;
+  reward: {
+    tweet_url: string;
+    credits_awarded: number;
+    status: 'pending' | 'approved' | 'rejected' | 'revoked';
+    rejection_reason: string | null;
+    created_at: string;
+  } | null;
 }
 
 export function getTweetRewardStatus() {
@@ -369,7 +375,7 @@ export function getTweetRewardStatus() {
 }
 
 export function claimTweetReward(tweetUrl: string) {
-  return request<{ success: boolean; credits_awarded: number; message: string }>('/credits/tweet-reward', {
+  return request<{ success: boolean; status: string; message: string }>('/credits/tweet-reward', {
     method: 'POST',
     body: JSON.stringify({ tweet_url: tweetUrl }),
   });

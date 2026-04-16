@@ -510,3 +510,43 @@ export function getAssessments() {
 export function getAssessmentDetail(id: string) {
   return request<AssessmentDetail>(`/assessments/${id}`);
 }
+
+// ---- Tweet Rewards ----
+
+export interface AdminTweetReward {
+  id: string;
+  builder_id: string;
+  builder_name: string;
+  builder_email: string;
+  tweet_url: string;
+  credits_awarded: number;
+  status: 'pending' | 'approved' | 'rejected' | 'revoked';
+  rejection_reason: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+}
+
+export interface AdminTweetRewardsResponse {
+  tweet_rewards: AdminTweetReward[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+export function getTweetRewards(params?: { status?: string; page?: number; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.status) query.set('status', params.status);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return request<AdminTweetRewardsResponse>(`/tweet-rewards${qs ? `?${qs}` : ''}`);
+}
+
+export function reviewTweetReward(id: string, action: 'approve' | 'reject', reason?: string) {
+  return request<AdminTweetReward>(`/tweet-rewards/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action, reason }),
+  });
+}

@@ -116,18 +116,29 @@ export async function creditsRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /api/v1/credits/tweet-reward — check if builder already claimed
+  // GET /api/v1/credits/tweet-reward — check builder's tweet reward status
   app.get('/tweet-reward', async (request: FastifyRequest) => {
     const builder = request.builder!;
-    const [reward] = await sql<{ id: string; tweet_url: string; credits_awarded: number; created_at: Date }[]>`
-      SELECT id, tweet_url, credits_awarded, created_at
+    const [reward] = await sql<{ id: string; tweet_url: string; credits_awarded: number; status: string; rejection_reason: string | null; created_at: Date }[]>`
+      SELECT id, tweet_url, credits_awarded, status, rejection_reason, created_at
       FROM tweet_rewards
-      WHERE builder_id = ${builder.id} AND status = 'credited'
+      WHERE builder_id = ${builder.id}
+      ORDER BY created_at DESC
+      LIMIT 1
     `;
-    return { claimed: !!reward, reward: reward ? { tweet_url: reward.tweet_url, credits_awarded: reward.credits_awarded, created_at: reward.created_at.toISOString() } : null };
+    return {
+      claimed: !!reward && reward.status === 'approved',
+      reward: reward ? {
+        tweet_url: reward.tweet_url,
+        credits_awarded: reward.credits_awarded,
+        status: reward.status,
+        rejection_reason: reward.rejection_reason,
+        created_at: reward.created_at.toISOString(),
+      } : null,
+    };
   });
 
-  // POST /api/v1/credits/tweet-reward — claim tweet credits
+  // POST /api/v1/credits/tweet-reward — submit tweet for admin review (no credits awarded yet)
   app.post('/tweet-reward', {
     schema: {
       body: {
@@ -149,42 +160,28 @@ export async function creditsRoutes(app: FastifyInstance) {
       throw Errors.badRequest('Invalid tweet URL. Must be a link to a post on x.com or twitter.com', { field: 'tweet_url' });
     }
 
-    const REWARD_CREDITS = 25;
-
-    const result = await sql.begin(async (tx: any) => {
-      // Check if already claimed (unique index will catch race conditions too)
-      const [existing] = await tx<{ id: string }[]>`
-        SELECT id FROM tweet_rewards
-        WHERE builder_id = ${builder.id} AND status = 'credited'
-      `;
-      if (existing) {
-        throw Errors.badRequest('Tweet reward already claimed');
+    // Check if builder already has a pending or approved claim
+    const [existing] = await sql<{ status: string }[]>`
+      SELECT status FROM tweet_rewards
+      WHERE builder_id = ${builder.id} AND status IN ('pending', 'approved')
+    `;
+    if (existing) {
+      if (existing.status === 'pending') {
+        throw Errors.badRequest('You already have a tweet submission pending review');
       }
+      throw Errors.badRequest('Tweet reward already claimed');
+    }
 
-      // Ensure credit balance exists
-      await CreditBalanceModel.ensureExists(builder.id);
+    // Insert as pending — credits awarded only after admin approves
+    await sql`
+      INSERT INTO tweet_rewards (builder_id, tweet_url, status)
+      VALUES (${builder.id}, ${tweet_url}, 'pending')
+    `;
 
-      // Insert reward record
-      await tx`
-        INSERT INTO tweet_rewards (builder_id, tweet_url, credits_awarded)
-        VALUES (${builder.id}, ${tweet_url}, ${REWARD_CREDITS})
-      `;
-
-      // Add credits
-      await CreditBalanceModel.topup(builder.id, REWARD_CREDITS, tx);
-
-      // Record transaction
-      await TransactionModel.insert({
-        type: 'topup',
-        builder_id: builder.id,
-        credit_amount: REWARD_CREDITS,
-        currency_amount_cents: 0,
-        description: `Tweet reward: ${REWARD_CREDITS} free credits`,
-      }, tx);
-
-      return { credits_awarded: REWARD_CREDITS };
-    });
-
-    return { success: true, credits_awarded: result.credits_awarded, message: `${result.credits_awarded} credits added to your account` };
+    return {
+      success: true,
+      status: 'pending',
+      message: 'Your tweet has been submitted for review. You\'ll receive 25 credits once approved.',
+    };
   });
 }

@@ -8,6 +8,8 @@ import sql from '../lib/db.js';
 import { S3Service } from '../services/s3.service.js';
 import { EmailService } from '../lib/email.js';
 import { ASSESSMENT_CATALOG } from '../services/sandbox-scoring.service.js';
+import { CreditBalanceModel } from '../models/credit-balance.js';
+import { TransactionModel } from '../models/transaction.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   await adminAuthPlugin(app);
@@ -803,6 +805,109 @@ export async function adminRoutes(app: FastifyInstance) {
       config: assessment.config,
       recent_submissions: submissions,
     };
+  });
+
+  // ── Tweet Rewards ──────────────────────────────────────────
+
+  // GET /api/v1/admin/tweet-rewards — list submissions
+  app.get('/tweet-rewards', async (request: FastifyRequest<{ Querystring: { status?: string; page?: string; limit?: string } }>) => {
+    const q = request.query as { status?: string; page?: string; limit?: string };
+    const page = Math.max(parseInt(q.page || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(q.limit || '20', 10), 1), 100);
+    const offset = (page - 1) * limit;
+    const status = q.status?.trim() || '';
+
+    const statusFrag = status ? sql`AND tr.status = ${status}` : sql``;
+
+    const [[{ count }], rewards] = await Promise.all([
+      sql<{ count: string }[]>`SELECT count(*)::text FROM tweet_rewards tr WHERE 1=1 ${statusFrag}`,
+      sql`
+        SELECT tr.id, tr.tweet_url, tr.credits_awarded, tr.status, tr.rejection_reason,
+          tr.created_at, tr.reviewed_at, tr.reviewed_by,
+          b.id AS builder_id, b.display_name AS builder_name, b.email AS builder_email
+        FROM tweet_rewards tr
+        LEFT JOIN builders b ON b.id = tr.builder_id
+        WHERE 1=1 ${statusFrag}
+        ORDER BY
+          CASE tr.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
+          tr.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `,
+    ]);
+
+    return {
+      tweet_rewards: rewards,
+      total: parseInt(count, 10),
+      page,
+      per_page: limit,
+      total_pages: Math.ceil(parseInt(count, 10) / limit),
+    };
+  });
+
+  // PATCH /api/v1/admin/tweet-rewards/:id — approve or reject
+  app.patch('/tweet-rewards/:id', async (request: FastifyRequest<{
+    Params: { id: string };
+    Body: { action: 'approve' | 'reject'; reason?: string };
+  }>) => {
+    const admin = request.admin!;
+    const { id } = request.params;
+    const { action, reason } = request.body as { action: string; reason?: string };
+
+    if (action !== 'approve' && action !== 'reject') {
+      throw Errors.badRequest('action must be "approve" or "reject"');
+    }
+
+    const [reward] = await sql<{
+      id: string; builder_id: string; tweet_url: string; credits_awarded: number; status: string;
+    }[]>`SELECT * FROM tweet_rewards WHERE id = ${id}`;
+
+    if (!reward) throw Errors.notFound('Tweet reward not found');
+    if (reward.status !== 'pending') {
+      throw Errors.badRequest(`Cannot ${action} a reward that is already ${reward.status}`);
+    }
+
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+
+    const [updated] = await sql`
+      UPDATE tweet_rewards
+      SET status = ${newStatus},
+          reviewed_at = NOW(),
+          reviewed_by = ${admin.id},
+          rejection_reason = ${reason || null}
+      WHERE id = ${id}
+      RETURNING *
+    `;
+
+    // Award credits on approval
+    if (action === 'approve') {
+      await CreditBalanceModel.ensureExists(reward.builder_id);
+      await sql.begin(async (tx: any) => {
+        await CreditBalanceModel.topup(reward.builder_id, reward.credits_awarded, tx);
+        await TransactionModel.insert({
+          type: 'topup',
+          builder_id: reward.builder_id,
+          credit_amount: reward.credits_awarded,
+          currency_amount_cents: 0,
+          description: `Tweet reward approved: ${reward.credits_awarded} free credits`,
+        }, tx);
+      });
+
+      // Send email notification (fire-and-forget)
+      const [builder] = await sql<{ email: string; display_name: string }[]>`
+        SELECT email, display_name FROM builders WHERE id = ${reward.builder_id}
+      `;
+      if (builder?.email) {
+        const balance = await CreditBalanceModel.getByBuilderId(reward.builder_id);
+        EmailService.sendCreditPurchase(
+          builder.email,
+          reward.credits_awarded,
+          '$0.00 (tweet reward)',
+          balance?.available_credits || 0,
+        ).catch(err => request.log.error(err, 'Failed to send tweet approval email'));
+      }
+    }
+
+    return updated;
   });
 }
 
