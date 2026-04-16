@@ -226,6 +226,34 @@ export interface AdminTestCasesResponse {
   total_pages: number;
 }
 
+export interface TestCaseDetail {
+  id: string;
+  title: string;
+  description: string;
+  template_type: string;
+  type: string;
+  status: string;
+  credit_cost: number;
+  url: string;
+  steps: { instruction: string; expected?: string }[];
+  status_history: { status: string; at: string; tester_id?: string; reason?: string; old_tester_id?: string; new_tester_id?: string }[];
+  builder_name: string;
+  builder_email: string;
+  tester_name: string | null;
+  tester_email: string | null;
+  created_at: string;
+  assigned_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  expires_at: string | null;
+  step_results: { step_index: number; status: string; severity: string | null; actual_behavior: string | null; notes: string | null; created_at: string }[];
+  test_result: { verdict: string; summary: string; steps_passed: number; steps_failed: number; steps_blocked: number; steps_total: number; duration_minutes: number; recording_url: string | null; created_at: string } | null;
+}
+
+export function getTestCaseDetail(id: string) {
+  return request<TestCaseDetail>(`/test-cases/${id}`);
+}
+
 export function reassignTestCase(testCaseId: string, testerId: string, reason?: string) {
   return request<Record<string, unknown>>(`/test-cases/${testCaseId}/reassign`, {
     method: 'PATCH',

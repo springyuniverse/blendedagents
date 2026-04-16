@@ -530,6 +530,37 @@ export async function adminRoutes(app: FastifyInstance) {
     return updated;
   });
 
+  // GET /api/v1/admin/test-cases/:id — get full test case detail with activity log
+  app.get('/test-cases/:id', async (request: FastifyRequest<{ Params: { id: string } }>) => {
+    const { id } = request.params;
+    const [tc] = await sql`
+      SELECT tc.*,
+        b.display_name AS builder_name, b.email AS builder_email,
+        t.display_name AS tester_name, t.email AS tester_email
+      FROM test_cases tc
+      LEFT JOIN builders b ON b.id = tc.builder_id
+      LEFT JOIN testers t ON t.id = tc.assigned_tester_id
+      WHERE tc.id = ${id}
+    `;
+    if (!tc) throw Errors.notFound('Test case not found');
+
+    // Get step results if any
+    const stepResults = await sql`
+      SELECT step_index, status, severity, actual_behavior, notes, created_at
+      FROM step_results WHERE test_case_id = ${id}
+      ORDER BY step_index
+    `;
+
+    // Get test result if completed
+    const [testResult] = await sql`
+      SELECT verdict, summary, steps_passed, steps_failed, steps_blocked, steps_total,
+        duration_minutes, recording_url, created_at
+      FROM test_results WHERE test_case_id = ${id}
+    `;
+
+    return { ...tc, step_results: stepResults, test_result: testResult || null };
+  });
+
   // GET /api/v1/admin/transactions — list all transactions
   app.get('/transactions', async (request: FastifyRequest<{ Querystring: { page?: string; limit?: string; type?: string } }>) => {
     const q = request.query as { page?: string; limit?: string; type?: string };

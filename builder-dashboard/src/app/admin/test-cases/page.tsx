@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getAdminTestCases, getActiveTesters, reassignTestCase, type AdminTestCase, type AdminTester } from '@/lib/admin-api';
+import { getAdminTestCases, getActiveTesters, reassignTestCase, getTestCaseDetail, type AdminTestCase, type AdminTester, type TestCaseDetail } from '@/lib/admin-api';
 import { StatusBadge } from '@/components/StatusBadge';
 import { DataToolbar, type Filter, type FilterKeyDef, type QuickFilter } from '@/components/DataToolbar';
-import { User, UserCheck, RefreshCw, Check, X } from 'lucide-react';
+import { User, UserCheck, RefreshCw, Check, X, Clock, ArrowRight, ChevronRight, FileText, Activity } from 'lucide-react';
 
 const FILTER_KEYS: FilterKeyDef[] = [
   { key: 'status', label: 'Status', type: 'enum', options: ['queued', 'assigned', 'in_progress', 'submitted', 'completed', 'cancelled', 'expired'] },
@@ -27,6 +27,167 @@ const QUICK_FILTERS: QuickFilter[] = [
   { label: 'Flow only', filters: [{ key: 'template_type', operator: 'is', value: 'flow_test' }] },
   { label: 'Review only', filters: [{ key: 'template_type', operator: 'is', value: 'review_test' }] },
 ];
+
+const STATUS_COLORS: Record<string, string> = {
+  queued: 'bg-text-muted/20 border-text-muted/30',
+  assigned: 'bg-accent-admin/20 border-accent-admin/30',
+  in_progress: 'bg-accent-warning/20 border-accent-warning/30',
+  submitted: 'bg-accent-flow/20 border-accent-flow/30',
+  completed: 'bg-accent-review/20 border-accent-review/30',
+  expired: 'bg-accent-danger/20 border-accent-danger/30',
+  cancelled: 'bg-accent-danger/20 border-accent-danger/30',
+  reassigned: 'bg-accent-admin/20 border-accent-admin/30',
+};
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+}
+
+function DetailModal({ testCaseId, onClose }: { testCaseId: string; onClose: () => void }) {
+  const { data: tc, isLoading } = useQuery({
+    queryKey: ['admin-test-case-detail', testCaseId],
+    queryFn: () => getTestCaseDetail(testCaseId),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface border border-border rounded-xl shadow-lifted w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {isLoading || !tc ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="w-5 h-5 border-2 border-accent-admin border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-border flex items-start justify-between sticky top-0 bg-surface z-10">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-semibold text-text-primary truncate">{tc.title}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <StatusBadge status={tc.status} />
+                  <span className="text-[11px] text-text-muted">{tc.id.slice(0, 8)}</span>
+                  <span className="text-[11px] text-text-muted">{tc.credit_cost} credits</span>
+                </div>
+              </div>
+              <button onClick={onClose} className="text-text-muted hover:text-text-primary p-1 shrink-0"><X className="w-4 h-4" /></button>
+            </div>
+
+            {/* Info row */}
+            <div className="px-6 py-3 border-b border-border grid grid-cols-4 gap-4 text-xs">
+              <div>
+                <p className="text-text-muted">Builder</p>
+                <p className="text-text-primary font-medium">{tc.builder_name}</p>
+              </div>
+              <div>
+                <p className="text-text-muted">Tester</p>
+                <p className="text-text-primary font-medium">{tc.tester_name || '—'}</p>
+              </div>
+              <div>
+                <p className="text-text-muted">Created</p>
+                <p className="text-text-primary font-medium">{formatDateTime(tc.created_at)}</p>
+              </div>
+              <div>
+                <p className="text-text-muted">Completed</p>
+                <p className="text-text-primary font-medium">{tc.completed_at ? formatDateTime(tc.completed_at) : '—'}</p>
+              </div>
+            </div>
+
+            {/* Activity Timeline */}
+            <div className="px-6 py-4">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5" strokeWidth={1.5} /> Activity Log
+              </h4>
+              <div className="relative pl-6">
+                {/* Vertical line */}
+                <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border" />
+
+                {(tc.status_history || []).map((entry, i) => (
+                  <div key={i} className="relative pb-4 last:pb-0">
+                    {/* Dot */}
+                    <div className={`absolute left-[-21px] top-1 w-3.5 h-3.5 rounded-full border-2 ${STATUS_COLORS[entry.status] || 'bg-surface-secondary border-border'}`} />
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-text-primary capitalize">{entry.status.replace('_', ' ')}</span>
+                        {entry.tester_id && <span className="text-[10px] text-text-muted font-mono">{entry.tester_id.slice(0, 8)}</span>}
+                        {entry.reason && <span className="text-[10px] text-accent-warning">({entry.reason})</span>}
+                        {entry.old_tester_id && entry.new_tester_id && (
+                          <span className="text-[10px] text-text-muted flex items-center gap-1">
+                            {entry.old_tester_id.slice(0, 6)} <ArrowRight className="w-2.5 h-2.5" /> {entry.new_tester_id.slice(0, 6)}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-text-muted font-mono shrink-0">{formatDateTime(entry.at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Test Result */}
+            {tc.test_result && (
+              <div className="px-6 py-4 border-t border-border">
+                <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" strokeWidth={1.5} /> Result
+                </h4>
+                <div className="grid grid-cols-5 gap-3 mb-3">
+                  <div className="bg-surface-secondary/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-text-muted">Verdict</p>
+                    <p className={`text-sm font-bold ${tc.test_result.verdict === 'pass' ? 'text-accent-review' : 'text-accent-danger'}`}>
+                      {tc.test_result.verdict}
+                    </p>
+                  </div>
+                  <div className="bg-surface-secondary/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-text-muted">Passed</p>
+                    <p className="text-sm font-bold text-accent-review">{tc.test_result.steps_passed}</p>
+                  </div>
+                  <div className="bg-surface-secondary/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-text-muted">Failed</p>
+                    <p className="text-sm font-bold text-accent-danger">{tc.test_result.steps_failed}</p>
+                  </div>
+                  <div className="bg-surface-secondary/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-text-muted">Blocked</p>
+                    <p className="text-sm font-bold text-text-muted">{tc.test_result.steps_blocked}</p>
+                  </div>
+                  <div className="bg-surface-secondary/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-text-muted">Duration</p>
+                    <p className="text-sm font-bold text-text-primary">{tc.test_result.duration_minutes}m</p>
+                  </div>
+                </div>
+                {tc.test_result.summary && (
+                  <p className="text-xs text-text-secondary bg-surface-secondary/50 rounded-lg px-3 py-2">{tc.test_result.summary}</p>
+                )}
+              </div>
+            )}
+
+            {/* Step Results */}
+            {tc.step_results && tc.step_results.length > 0 && (
+              <div className="px-6 py-4 border-t border-border">
+                <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Step Results</h4>
+                <div className="space-y-2">
+                  {tc.step_results.map((sr) => (
+                    <div key={sr.step_index} className="flex items-start gap-3 px-3 py-2 bg-surface-secondary/30 rounded-lg">
+                      <span className="w-5 h-5 rounded-full bg-accent-admin/10 text-accent-admin text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                        {sr.step_index + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={sr.status} />
+                          {sr.severity && <span className="text-[10px] px-1.5 py-0.5 bg-surface-secondary rounded text-text-muted">{sr.severity}</span>}
+                        </div>
+                        {sr.actual_behavior && <p className="text-xs text-text-secondary mt-1">{sr.actual_behavior}</p>}
+                        {sr.notes && <p className="text-[11px] text-text-muted mt-0.5 italic">{sr.notes}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ReassignModal({ testCase, onClose }: { testCase: AdminTestCase; onClose: () => void }) {
   const qc = useQueryClient();
@@ -111,6 +272,7 @@ export default function AdminTestCasesPage() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Filter[]>([]);
   const [reassigning, setReassigning] = useState<AdminTestCase | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   // Extract server-side filters from the filter list
   const statusFilter = filters.find(f => f.key === 'status' && f.operator === 'is')?.value || '';
@@ -194,9 +356,9 @@ export default function AdminTestCasesPage() {
               </thead>
               <tbody>
                 {displayedTests.map(tc => (
-                  <tr key={tc.id} className="border-b border-border-subtle hover:bg-surface-secondary/50 transition-colors">
+                  <tr key={tc.id} className="border-b border-border-subtle hover:bg-surface-secondary/50 transition-colors cursor-pointer" onClick={() => setViewingId(tc.id)}>
                     <td className="px-5 py-3.5">
-                      <p className="text-sm font-medium text-text-primary truncate max-w-[240px]">{tc.title}</p>
+                      <p className="text-sm font-medium text-text-primary truncate max-w-[240px] group-hover:text-accent-admin">{tc.title}</p>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium ${
@@ -228,7 +390,7 @@ export default function AdminTestCasesPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       {canReassign(tc) && (
-                        <button onClick={() => setReassigning(tc)}
+                        <button onClick={(e) => { e.stopPropagation(); setReassigning(tc); }}
                           className="text-text-muted hover:text-accent-admin p-1.5 rounded-md hover:bg-accent-admin/8 transition-colors"
                           title="Reassign tester">
                           <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
@@ -251,6 +413,7 @@ export default function AdminTestCasesPage() {
       </div>
 
       {reassigning && <ReassignModal testCase={reassigning} onClose={() => setReassigning(null)} />}
+      {viewingId && <DetailModal testCaseId={viewingId} onClose={() => setViewingId(null)} />}
     </div>
   );
 }
