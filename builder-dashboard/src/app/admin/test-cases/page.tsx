@@ -101,25 +101,28 @@ function DetailModal({ testCaseId, onClose }: { testCaseId: string; onClose: () 
                 {/* Vertical line */}
                 <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border" />
 
-                {(tc.status_history || []).map((entry, i) => (
-                  <div key={i} className="relative pb-4 last:pb-0">
-                    {/* Dot */}
-                    <div className={`absolute left-[-21px] top-1 w-3.5 h-3.5 rounded-full border-2 ${STATUS_COLORS[entry.status] || 'bg-surface-secondary border-border'}`} />
-                    <div className="flex items-baseline justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-text-primary capitalize">{entry.status.replace('_', ' ')}</span>
-                        {entry.tester_id && <span className="text-[10px] text-text-muted font-mono">{entry.tester_id.slice(0, 8)}</span>}
-                        {entry.reason && <span className="text-[10px] text-accent-warning">({entry.reason})</span>}
-                        {entry.old_tester_id && entry.new_tester_id && (
-                          <span className="text-[10px] text-text-muted flex items-center gap-1">
-                            {entry.old_tester_id.slice(0, 6)} <ArrowRight className="w-2.5 h-2.5" /> {entry.new_tester_id.slice(0, 6)}
-                          </span>
-                        )}
+                {(tc.status_history || []).map((entry, i) => {
+                  const status = entry?.status || 'unknown';
+                  return (
+                    <div key={i} className="relative pb-4 last:pb-0">
+                      {/* Dot */}
+                      <div className={`absolute left-[-21px] top-1 w-3.5 h-3.5 rounded-full border-2 ${STATUS_COLORS[status] || 'bg-surface-secondary border-border'}`} />
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-text-primary capitalize">{status.replace(/_/g, ' ')}</span>
+                          {entry?.tester_id && <span className="text-[10px] text-text-muted font-mono">{entry.tester_id.slice(0, 8)}</span>}
+                          {entry?.reason && <span className="text-[10px] text-accent-warning">({entry.reason})</span>}
+                          {entry?.old_tester_id && entry?.new_tester_id && (
+                            <span className="text-[10px] text-text-muted flex items-center gap-1">
+                              {entry.old_tester_id.slice(0, 6)} <ArrowRight className="w-2.5 h-2.5" /> {entry.new_tester_id.slice(0, 6)}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-text-muted font-mono shrink-0">{entry?.at ? formatDateTime(entry.at) : '—'}</span>
                       </div>
-                      <span className="text-[11px] text-text-muted font-mono shrink-0">{formatDateTime(entry.at)}</span>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
