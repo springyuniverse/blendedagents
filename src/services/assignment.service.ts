@@ -10,7 +10,7 @@ import { CreditService, calculateCreditCost, REVIEW_BASE_COST, calculateReviewBo
 import { gradeAssessment, type AssessmentConfig } from './sandbox-scoring.service.js';
 import { getJobManager } from '../lib/jobs.js';
 import { Errors } from '../lib/errors.js';
-import { EmailService } from '../lib/email.js';
+import { EmailService, sendAdminNotification } from '../lib/email.js';
 import type { Tester } from '../models/tester.js';
 
 const APP_URL = process.env.APP_URL || 'https://blendedagents.com';
@@ -427,6 +427,13 @@ export const AssignmentService = {
         console.error('[email] Failed to send task-completed email:', err);
       }
     })();
+
+    // Admin notification
+    sendAdminNotification('test_case_completed', {
+      actorName: tester?.display_name || 'Tester',
+      actorEmail: tester?.email || '',
+      message: `"${testCase.title}" completed with verdict: ${results.verdict}.`,
+    });
   },
 
   /**
@@ -571,6 +578,13 @@ export const AssignmentService = {
         console.error('[email] Failed to send task-completed email:', err);
       }
     })();
+
+    // Admin notification
+    sendAdminNotification('test_case_completed', {
+      actorName: tester?.display_name || 'Tester',
+      actorEmail: tester?.email || '',
+      message: `"${testCase.title}" review completed with verdict: ${results.verdict}. Findings: ${results.findings?.length || 0}.`,
+    });
   },
 
   /**

@@ -27,12 +27,16 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // PATCH /api/v1/admin/settings — update platform settings
   app.patch('/settings', async (request: FastifyRequest<{
-    Body: { default_max_invites?: number; require_invite_code?: boolean };
+    Body: { default_max_invites?: number; require_invite_code?: boolean; admin_notify_emails?: string[]; admin_notifications?: Record<string, boolean> };
   }>) => {
     const body = request.body as Record<string, unknown>;
     const updates: Record<string, unknown> = {};
     if (typeof body.default_max_invites === 'number') updates.default_max_invites = body.default_max_invites;
     if (typeof body.require_invite_code === 'boolean') updates.require_invite_code = body.require_invite_code;
+    if (Array.isArray(body.admin_notify_emails)) updates.admin_notify_emails = body.admin_notify_emails;
+    if (body.admin_notifications && typeof body.admin_notifications === 'object') {
+      updates.admin_notifications = JSON.stringify(body.admin_notifications);
+    }
     if (Object.keys(updates).length === 0) return PlatformSettingsModel.get();
     return PlatformSettingsModel.update(updates);
   });

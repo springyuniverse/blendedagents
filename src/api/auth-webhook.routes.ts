@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { EmailService } from '../lib/email.js';
+import { EmailService, sendAdminNotification } from '../lib/email.js';
 
 const SUPABASE_WEBHOOK_SECRET = process.env.SUPABASE_WEBHOOK_SECRET || '';
 
@@ -54,8 +54,13 @@ export async function authWebhookRoutes(app: FastifyInstance) {
       request.log.info(`Welcome email sent to ${role}: ${email}`);
     } catch (err) {
       request.log.error(err, `Failed to send welcome email to ${email}`);
-      // Return 200 anyway — don't make Supabase retry on email failures
     }
+
+    // Admin notification (fire-and-forget)
+    sendAdminNotification(
+      role === 'tester' ? 'new_tester' : 'new_builder',
+      { actorName: displayName, actorEmail: email, message: `${displayName} (${email}) just signed up as a ${role}.` },
+    );
 
     reply.status(200).send({ ok: true });
   });

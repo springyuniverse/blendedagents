@@ -242,6 +242,65 @@ export const EmailService = {
   },
 };
 
+// ── Admin Notifications ────────────────────────────────────────
+
+export type AdminNotificationType = 'new_builder' | 'new_tester' | 'test_case_submitted' | 'test_case_completed' | 'tweet_reward_submitted' | 'payout_processed';
+
+const NOTIFICATION_SUBJECTS: Record<AdminNotificationType, string> = {
+  new_builder: 'New builder registered',
+  new_tester: 'New tester registered',
+  test_case_submitted: 'New test case submitted',
+  test_case_completed: 'Test case completed',
+  tweet_reward_submitted: 'Tweet reward awaiting review',
+  payout_processed: 'Payout processed',
+};
+
+const NOTIFICATION_ADMIN_URLS: Record<AdminNotificationType, string> = {
+  new_builder: '/admin/builders',
+  new_tester: '/admin/testers',
+  test_case_submitted: '/admin/test-cases',
+  test_case_completed: '/admin/test-cases',
+  tweet_reward_submitted: '/admin/tweet-rewards',
+  payout_processed: '/admin/financials',
+};
+
+/**
+ * Send admin notification email if enabled in platform settings.
+ * Fire-and-forget — never throws, just logs errors.
+ */
+export async function sendAdminNotification(
+  type: AdminNotificationType,
+  detail: { actorName: string; actorEmail: string; message: string },
+) {
+  try {
+    // Check if this notification type is enabled
+    const [settings] = await sql<{ admin_notify_emails: string[]; admin_notifications: Record<string, boolean> }[]>`
+      SELECT admin_notify_emails, admin_notifications FROM platform_settings WHERE id = 1
+    `;
+    if (!settings) return;
+    if (!settings.admin_notifications[type]) return;
+    if (!settings.admin_notify_emails || settings.admin_notify_emails.length === 0) return;
+
+    const html = await loadTemplateAsync('admin-notification', {
+      NOTIFICATION_TITLE: NOTIFICATION_SUBJECTS[type],
+      NOTIFICATION_MESSAGE: detail.message,
+      EVENT_TYPE: type.replace(/_/g, ' '),
+      ACTOR_NAME: detail.actorName,
+      ACTOR_EMAIL: detail.actorEmail,
+      EVENT_TIME: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+      ADMIN_URL: `${APP_URL}${NOTIFICATION_ADMIN_URLS[type]}`,
+    });
+
+    const subject = `[Admin] ${NOTIFICATION_SUBJECTS[type]}`;
+
+    for (const email of settings.admin_notify_emails) {
+      await resend.emails.send({ from: FROM_ADDRESS, to: email, subject, html });
+    }
+  } catch (err) {
+    console.error('Failed to send admin notification', type, err);
+  }
+}
+
 // ── Template metadata for seeding ───────────────────────────────
 
 const TEMPLATE_META: Record<string, { subject: string; description: string; category: string; variables: string[] }> = {
@@ -262,6 +321,7 @@ const TEMPLATE_META: Record<string, { subject: string; description: string; cate
   'weekly-payout': { subject: 'Your weekly earnings summary', description: 'Weekly earnings summary for testers', category: 'tester', variables: ['PERIOD_START', 'PERIOD_END', 'TASKS_COMPLETED', 'PAYOUT_AMOUNT', 'TOTAL_EARNINGS', 'EARNINGS_URL'] },
   'referral-used': { subject: 'Someone used your invite code', description: 'Sent when a referral code is redeemed', category: 'tester', variables: ['INVITE_CODE', 'USED_INVITES', 'MAX_INVITES', 'REFERRALS_URL'] },
   'payout-completed': { subject: 'Payout complete — funds sent', description: 'Sent when a payout is processed via Stripe', category: 'tester', variables: ['PERIOD_START', 'PERIOD_END', 'TASKS_COMPLETED', 'PAYOUT_AMOUNT', 'EARNINGS_URL'] },
+  'admin-notification': { subject: 'Admin notification', description: 'Generic admin alert for platform events', category: 'system', variables: ['NOTIFICATION_TITLE', 'NOTIFICATION_MESSAGE', 'EVENT_TYPE', 'ACTOR_NAME', 'ACTOR_EMAIL', 'EVENT_TIME', 'ADMIN_URL'] },
 };
 
 /** Seed email_templates table from filesystem if empty */

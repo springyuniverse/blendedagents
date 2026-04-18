@@ -55,9 +55,20 @@ export async function checkAdminAccess(): Promise<boolean> {
 
 // ---- Settings ----
 
+export interface AdminNotifications {
+  new_builder: boolean;
+  new_tester: boolean;
+  test_case_submitted: boolean;
+  test_case_completed: boolean;
+  tweet_reward_submitted: boolean;
+  payout_processed: boolean;
+}
+
 export interface PlatformSettings {
   default_max_invites: number;
   require_invite_code: boolean;
+  admin_notify_emails: string[];
+  admin_notifications: AdminNotifications;
   updated_at: string;
 }
 
@@ -65,7 +76,12 @@ export function getPlatformSettings() {
   return request<PlatformSettings>('/settings');
 }
 
-export function updatePlatformSettings(data: Partial<Pick<PlatformSettings, 'default_max_invites' | 'require_invite_code'>>) {
+export function updatePlatformSettings(data: Partial<{
+  default_max_invites: number;
+  require_invite_code: boolean;
+  admin_notify_emails: string[];
+  admin_notifications: AdminNotifications;
+}>) {
   return request<PlatformSettings>('/settings', {
     method: 'PATCH',
     body: JSON.stringify(data),

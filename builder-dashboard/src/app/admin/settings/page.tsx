@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPlatformSettings, updatePlatformSettings } from '@/lib/admin-api';
-import { Check } from 'lucide-react';
+import { getPlatformSettings, updatePlatformSettings, type AdminNotifications } from '@/lib/admin-api';
+import { Check, X, Plus } from 'lucide-react';
 
 function ToggleSwitch({ checked, onChange, label, description }: {
   checked: boolean; onChange: (v: boolean) => void; label: string; description?: string;
@@ -22,6 +22,15 @@ function ToggleSwitch({ checked, onChange, label, description }: {
   );
 }
 
+const NOTIFICATION_LABELS: Record<keyof AdminNotifications, { label: string; description: string }> = {
+  new_builder: { label: 'New builder registration', description: 'When a builder signs up for the platform' },
+  new_tester: { label: 'New tester registration', description: 'When a tester signs up for the platform' },
+  test_case_submitted: { label: 'Test case submitted', description: 'When a builder submits a new test case via API' },
+  test_case_completed: { label: 'Test case completed', description: 'When a tester finishes testing and submits results' },
+  tweet_reward_submitted: { label: 'Tweet reward submitted', description: 'When a builder submits a tweet for review' },
+  payout_processed: { label: 'Payout processed', description: 'When a tester payout is processed' },
+};
+
 export default function AdminSettingsPage() {
   const qc = useQueryClient();
 
@@ -32,12 +41,23 @@ export default function AdminSettingsPage() {
 
   const [requireInvite, setRequireInvite] = useState(true);
   const [defaultInvites, setDefaultInvites] = useState(0);
+  const [notifyEmails, setNotifyEmails] = useState<string[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotifications>({
+    new_builder: true, new_tester: true, test_case_submitted: true,
+    test_case_completed: true, tweet_reward_submitted: true, payout_processed: true,
+  });
+  const [newEmail, setNewEmail] = useState('');
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (settings) {
       setRequireInvite(settings.require_invite_code);
       setDefaultInvites(settings.default_max_invites);
+      setNotifyEmails(settings.admin_notify_emails || []);
+      setNotifications(settings.admin_notifications || {
+        new_builder: true, new_tester: true, test_case_submitted: true,
+        test_case_completed: true, tweet_reward_submitted: true, payout_processed: true,
+      });
       setDirty(false);
     }
   }, [settings]);
@@ -46,6 +66,8 @@ export default function AdminSettingsPage() {
     mutationFn: () => updatePlatformSettings({
       require_invite_code: requireInvite,
       default_max_invites: defaultInvites,
+      admin_notify_emails: notifyEmails,
+      admin_notifications: notifications,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-settings'] });
@@ -55,6 +77,25 @@ export default function AdminSettingsPage() {
 
   const handleChange = <T,>(setter: (v: T) => void) => (v: T) => {
     setter(v);
+    setDirty(true);
+  };
+
+  const addEmail = () => {
+    const email = newEmail.trim().toLowerCase();
+    if (email && email.includes('@') && !notifyEmails.includes(email)) {
+      setNotifyEmails([...notifyEmails, email]);
+      setNewEmail('');
+      setDirty(true);
+    }
+  };
+
+  const removeEmail = (email: string) => {
+    setNotifyEmails(notifyEmails.filter(e => e !== email));
+    setDirty(true);
+  };
+
+  const toggleNotification = (key: keyof AdminNotifications) => {
+    setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
     setDirty(true);
   };
 
@@ -84,7 +125,7 @@ export default function AdminSettingsPage() {
             checked={requireInvite}
             onChange={handleChange(setRequireInvite)}
             label="Require invite code to sign up"
-            description="When enabled, new testers must enter a valid invite code during registration. When disabled, anyone can sign up."
+            description="When enabled, new testers must enter a valid invite code during registration."
           />
 
           <div>
@@ -95,8 +136,59 @@ export default function AdminSettingsPage() {
               className={`${inputClass} max-w-[120px]`}
             />
             <p className="text-xs text-text-muted mt-1">
-              New testers will receive this many invite slots automatically. Set to 0 to require manual allocation per tester.
+              New testers will receive this many invite slots automatically.
             </p>
+          </div>
+        </div>
+
+        {/* Admin Email Notifications */}
+        <div className="bg-surface border border-border rounded-lg p-6 space-y-5">
+          <h2 className="text-sm font-semibold text-text-primary">Admin Email Notifications</h2>
+          <p className="text-xs text-text-muted -mt-3">Get notified by email when key platform events occur.</p>
+
+          {/* Recipient emails */}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">Notification recipients</label>
+            <div className="space-y-1.5 mb-2">
+              {notifyEmails.map(email => (
+                <div key={email} className="flex items-center gap-2 px-3 py-1.5 bg-surface-secondary rounded-lg">
+                  <span className="text-sm text-text-primary flex-1">{email}</span>
+                  <button onClick={() => removeEmail(email)} className="text-text-muted hover:text-accent-danger p-0.5 transition-colors">
+                    <X className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  </button>
+                </div>
+              ))}
+              {notifyEmails.length === 0 && (
+                <p className="text-xs text-text-muted italic">No recipients — notifications are disabled until you add at least one email.</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addEmail()}
+                placeholder="admin@example.com"
+                className={`${inputClass} flex-1`}
+              />
+              <button onClick={addEmail} disabled={!newEmail.trim()}
+                className="px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary hover:bg-accent-admin/8 disabled:opacity-40 transition-colors flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5" strokeWidth={1.5} /> Add
+              </button>
+            </div>
+          </div>
+
+          {/* Notification toggles */}
+          <div className="space-y-4 pt-2">
+            {(Object.keys(NOTIFICATION_LABELS) as (keyof AdminNotifications)[]).map(key => (
+              <ToggleSwitch
+                key={key}
+                checked={notifications[key]}
+                onChange={() => toggleNotification(key)}
+                label={NOTIFICATION_LABELS[key].label}
+                description={NOTIFICATION_LABELS[key].description}
+              />
+            ))}
           </div>
         </div>
 

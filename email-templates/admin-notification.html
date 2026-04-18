@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{NOTIFICATION_TITLE}}</title>
+  <style>
+    @media only screen and (max-width: 520px) {
+      .email-card { width: 100% !important; }
+      .email-body { padding: 24px 20px !important; }
+      .email-header { padding: 24px 20px 20px !important; }
+      .email-footer { padding: 16px 20px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#faf9fb;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#faf9fb;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" class="email-card" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #dbd6e1;border-radius:12px;overflow:hidden;">
+
+          <!-- Header -->
+          <tr>
+            <td class="email-header" style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #ece8f0;">
+              <div style="display:inline-block;width:44px;height:44px;background-color:#3b82f6;border-radius:10px;line-height:44px;text-align:center;margin-bottom:12px;">
+                <span style="color:#ffffff;font-size:20px;font-weight:700;">A</span>
+              </div>
+              <h1 style="margin:0;font-size:18px;font-weight:700;color:#1d1127;letter-spacing:-0.02em;">
+                Admin Notification
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td class="email-body" style="padding:32px;">
+
+              <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1d1127;">
+                {{NOTIFICATION_TITLE}}
+              </h2>
+
+              <p style="margin:0 0 24px;font-size:14px;color:#645574;line-height:1.6;">
+                {{NOTIFICATION_MESSAGE}}
+              </p>
+
+              <!-- Detail rows -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border:1px solid #ece8f0;border-radius:8px;overflow:hidden;">
+                <tr>
+                  <td style="padding:12px 16px;font-size:13px;color:#9c8fb0;border-bottom:1px solid #ece8f0;width:120px;">Event</td>
+                  <td style="padding:12px 16px;font-size:13px;color:#1d1127;font-weight:600;border-bottom:1px solid #ece8f0;">{{EVENT_TYPE}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 16px;font-size:13px;color:#9c8fb0;border-bottom:1px solid #ece8f0;">Who</td>
+                  <td style="padding:12px 16px;font-size:13px;color:#1d1127;border-bottom:1px solid #ece8f0;">{{ACTOR_NAME}} ({{ACTOR_EMAIL}})</td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 16px;font-size:13px;color:#9c8fb0;">When</td>
+                  <td style="padding:12px 16px;font-size:13px;color:#1d1127;">{{EVENT_TIME}}</td>
+                </tr>
+              </table>
+
+              <!-- CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                <tr>
+                  <td style="background-color:#3b82f6;border-radius:8px;">
+                    <a href="{{ADMIN_URL}}" style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+                      View in Admin Panel
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="email-footer" style="padding:20px 32px;border-top:1px solid #ece8f0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9c8fb0;">
+                You're receiving this because admin notifications are enabled in platform settings.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

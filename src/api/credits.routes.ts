@@ -5,6 +5,7 @@ import { CreditRateConfigModel } from '../models/credit-rate-config.js';
 import { TransactionModel, VALID_TRANSACTION_TYPES, type TransactionType } from '../models/transaction.js';
 import { StripeService, calculateCreditsForAmount } from '../services/stripe.service.js';
 import { Errors } from '../lib/errors.js';
+import { sendAdminNotification } from '../lib/email.js';
 import sql from '../lib/db.js';
 
 export async function creditsRoutes(app: FastifyInstance) {
@@ -177,6 +178,13 @@ export async function creditsRoutes(app: FastifyInstance) {
       INSERT INTO tweet_rewards (builder_id, tweet_url, status)
       VALUES (${builder.id}, ${tweet_url}, 'pending')
     `;
+
+    // Admin notification
+    sendAdminNotification('tweet_reward_submitted', {
+      actorName: builder.display_name,
+      actorEmail: builder.email,
+      message: `${builder.display_name} submitted a tweet for reward credits: ${tweet_url}`,
+    });
 
     return {
       success: true,

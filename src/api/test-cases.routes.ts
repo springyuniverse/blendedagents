@@ -4,6 +4,7 @@ import { testerAuthPlugin } from '../middleware/tester-auth.js';
 import { TestCaseService } from '../services/test-case.service.js';
 import { AssignmentService } from '../services/assignment.service.js';
 import { Errors } from '../lib/errors.js';
+import { sendAdminNotification } from '../lib/email.js';
 
 const VALID_STATUSES = ['queued', 'assigned', 'in_progress', 'completed', 'cancelled', 'expired'];
 
@@ -166,6 +167,14 @@ export async function testCasesRoutes(app: FastifyInstance) {
     }>, reply: FastifyReply) => {
       const builder = request.builder!;
       const result = await TestCaseService.create(builder.id, request.body);
+
+      // Admin notification (fire-and-forget)
+      sendAdminNotification('test_case_submitted', {
+        actorName: builder.display_name,
+        actorEmail: builder.email,
+        message: `${builder.display_name} submitted a new ${request.body.template_type === 'review_test' ? 'review' : 'flow'} test: "${request.body.title}".`,
+      });
+
       reply.status(201).send(result);
     });
 
