@@ -35,7 +35,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (typeof body.require_invite_code === 'boolean') updates.require_invite_code = body.require_invite_code;
     if (Array.isArray(body.admin_notify_emails)) updates.admin_notify_emails = body.admin_notify_emails;
     if (body.admin_notifications && typeof body.admin_notifications === 'object') {
-      updates.admin_notifications = JSON.stringify(body.admin_notifications);
+      updates.admin_notifications = body.admin_notifications;
     }
     if (Object.keys(updates).length === 0) return PlatformSettingsModel.get();
     return PlatformSettingsModel.update(updates);
