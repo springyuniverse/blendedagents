@@ -61,6 +61,7 @@ export interface TaskDetail {
   has_credentials: boolean;
   credentials: Record<string, string> | null;
   assigned_at: string | null;
+  info_requests: Array<{ from: string; message: string; at: string; user_id: string }>;
   step_results: StepResultData[];
 }
 
@@ -191,6 +192,12 @@ export const testerApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  requestInfo: (taskId: string, message: string) =>
+    request<{ status: string; info_requests: Array<{ from: string; message: string; at: string; user_id: string }> }>(
+      `/tasks/${taskId}/request-info`,
+      { method: 'POST', body: JSON.stringify({ message }) },
+    ),
 
   getPresignedUrl: (data: {
     type: 'screenshot' | 'recording' | 'annotation';

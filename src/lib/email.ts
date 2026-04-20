@@ -240,6 +240,34 @@ export const EmailService = {
   async sendTestEmail(to: string, templateName: string, subject: string, htmlContent: string) {
     await resend.emails.send({ from: FROM_ADDRESS, to, subject: `[TEST] ${subject}`, html: htmlContent });
   },
+
+  /** Notify builder that tester needs more info */
+  async sendInfoRequested(to: string, test: { title: string; shortId: string; testerMessage: string }) {
+    const html = await loadTemplateAsync('admin-notification', {
+      NOTIFICATION_TITLE: 'More info needed for your test case',
+      NOTIFICATION_MESSAGE: `Your tester needs clarification before they can continue testing "${test.title}":\n\n"${test.testerMessage}"`,
+      EVENT_TYPE: 'info requested',
+      ACTOR_NAME: 'Tester',
+      ACTOR_EMAIL: '',
+      EVENT_TIME: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+      ADMIN_URL: `${APP_URL}/builder/test-cases/${test.shortId}`,
+    });
+    await send(to, `Info needed: "${test.title}"`, html);
+  },
+
+  /** Notify tester that builder provided the requested info */
+  async sendInfoProvided(to: string, test: { title: string; shortId: string; builderMessage: string }) {
+    const html = await loadTemplateAsync('admin-notification', {
+      NOTIFICATION_TITLE: 'Info provided — you can continue testing',
+      NOTIFICATION_MESSAGE: `The builder responded to your info request for "${test.title}":\n\n"${test.builderMessage}"`,
+      EVENT_TYPE: 'info provided',
+      ACTOR_NAME: 'Builder',
+      ACTOR_EMAIL: '',
+      EVENT_TIME: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+      ADMIN_URL: `${APP_URL}/tester/tasks/${test.shortId}`,
+    });
+    await send(to, `Info provided: "${test.title}" — continue testing`, html);
+  },
 };
 
 // ── Admin Notifications ────────────────────────────────────────

@@ -19,7 +19,7 @@ interface UnifiedTask {
   step_count: number;
   environment: string | null;
   tags: string[];
-  status: 'available' | 'requested' | 'assigned' | 'in_progress' | 'completed';
+  status: 'available' | 'requested' | 'assigned' | 'in_progress' | 'needs_info' | 'completed';
   created_at: string;
   assigned_at: string | null;
   completed_at: string | null;
@@ -85,7 +85,7 @@ function normalize(
 const PER_PAGE = 10;
 
 const FILTER_KEYS: FilterKeyDef[] = [
-  { key: 'status', label: 'Status', type: 'enum', options: ['available', 'requested', 'assigned', 'in_progress', 'completed'] },
+  { key: 'status', label: 'Status', type: 'enum', options: ['available', 'requested', 'assigned', 'in_progress', 'needs_info', 'completed'] },
   { key: 'environment', label: 'Environment', type: 'enum', options: ['staging', 'production', 'localhost'] },
   { key: 'step_count', label: 'Steps', type: 'number' },
   { key: 'tags', label: 'Tag', type: 'text' },
@@ -93,7 +93,7 @@ const FILTER_KEYS: FilterKeyDef[] = [
 ];
 
 const DISPLAY_LABELS: Record<string, Record<string, string>> = {
-  status: { available: 'Available', requested: 'Requested', assigned: 'Assigned', in_progress: 'In Progress', completed: 'Completed' },
+  status: { available: 'Available', requested: 'Requested', assigned: 'Assigned', in_progress: 'In Progress', needs_info: 'Needs Info', completed: 'Completed' },
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -101,6 +101,7 @@ const STATUS_STYLES: Record<string, string> = {
   requested: 'bg-amber-100 text-amber-700',
   assigned: 'bg-accent-warning/10 text-accent-warning',
   in_progress: 'bg-accent-review/10 text-accent-review',
+  needs_info: 'bg-orange-500/10 text-orange-500',
   completed: 'bg-surface-secondary text-text-secondary',
 };
 
@@ -159,6 +160,14 @@ function ActionCell({ task }: { task: UnifiedTask }) {
         </button>
         {showToast && <InReviewToast onClose={() => setShowToast(false)} />}
       </>
+    );
+  }
+  if (task.status === 'needs_info') {
+    return (
+      <Link href={`/tester/tasks/${task.id}`}
+        className="px-2.5 py-1 bg-orange-500/10 text-orange-500 border border-orange-500/20 text-xs font-medium rounded-md hover:bg-orange-500/20 transition-colors whitespace-nowrap">
+        Waiting
+      </Link>
     );
   }
   if (task.status === 'assigned' || task.status === 'in_progress') {

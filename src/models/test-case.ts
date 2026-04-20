@@ -31,7 +31,8 @@ export interface TestCase {
   ignore_areas: string | null;
   type: 'standard' | 'onboarding_assessment';
   assessment_config: Record<string, unknown> | null;
-  status_history: Array<{ status: string; at: string; tester_id?: string }>;
+  status_history: Array<{ status: string; at: string; tester_id?: string; note?: string }>;
+  info_requests: Array<{ from: 'tester' | 'builder'; message: string; at: string; user_id: string }>;
   created_at: Date;
   updated_at: Date;
 }

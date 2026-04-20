@@ -132,6 +132,7 @@ export interface TestCase {
   external_id?: string;
   callback_url?: string;
   status_history?: StatusEntry[];
+  info_requests?: Array<{ from: string; message: string; at: string; user_id: string }>;
   assigned_tester_id?: string;
   assigned_at?: string;
   completed_at?: string;
@@ -214,6 +215,13 @@ export function createTestCase(input: CreateTestCaseInput) {
 
 export function cancelTestCase(id: string) {
   return request<void>(`/test-cases/${id}`, { method: 'DELETE' });
+}
+
+export function replyToInfoRequest(id: string, message: string) {
+  return request<{ status: string; info_requests: Array<{ from: string; message: string; at: string; user_id: string }> }>(
+    `/test-cases/${id}/info-reply`,
+    { method: 'POST', body: JSON.stringify({ message }) },
+  );
 }
 
 export function updateTestCaseStatus(id: string, status: string) {

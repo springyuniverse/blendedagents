@@ -7,6 +7,7 @@ const STATUS_STYLES: Record<string, string> = {
   completed: 'bg-accent-review/10 text-accent-review',
   cancelled: 'bg-accent-danger/10 text-accent-danger',
   expired: 'bg-text-muted/10 text-text-muted',
+  needs_info: 'bg-orange-500/10 text-orange-500',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -16,6 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   expired: 'Expired',
+  needs_info: 'Needs Info',
 };
 
 export function StatusBadge({ status }: { status: string }) {

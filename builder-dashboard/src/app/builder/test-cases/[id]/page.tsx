@@ -1,8 +1,8 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTestCase, getTestResults, cancelTestCase } from '@/lib/api';
+import { getTestCase, getTestResults, cancelTestCase, replyToInfoRequest } from '@/lib/api';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TestResultView } from '@/components/TestResultView';
 import Link from 'next/link';
@@ -27,12 +27,22 @@ export default function TestCaseDetailPage({ params }: { params: Promise<{ id: s
     enabled: testCase?.status === 'completed',
   });
 
+  const [replyMessage, setReplyMessage] = useState('');
+
   const cancelMutation = useMutation({
     mutationFn: () => cancelTestCase(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-case', id] });
       queryClient.invalidateQueries({ queryKey: ['test-cases'] });
       queryClient.invalidateQueries({ queryKey: ['credit-balance'] });
+    },
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: () => replyToInfoRequest(id, replyMessage),
+    onSuccess: () => {
+      setReplyMessage('');
+      queryClient.invalidateQueries({ queryKey: ['test-case', id] });
     },
   });
 
@@ -190,6 +200,57 @@ export default function TestCaseDetailPage({ params }: { params: Promise<{ id: s
               <p className="text-sm text-text-secondary">{testCase.ignore_areas}</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Info Requests Thread */}
+      {testCase.info_requests && testCase.info_requests.length > 0 && (
+        <div className="bg-surface border border-orange-500/20 rounded-lg shadow-soft p-5">
+          <h3 className="text-sm font-medium text-orange-500 mb-3">Info Requests</h3>
+          <div className="space-y-3">
+            {testCase.info_requests.map((req: { from: string; message: string; at: string }, i: number) => (
+              <div key={i} className={`flex gap-3 ${req.from === 'builder' ? 'justify-end' : ''}`}>
+                <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                  req.from === 'tester'
+                    ? 'bg-orange-500/10 text-text-primary'
+                    : 'bg-accent-flow/10 text-text-primary'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium">{req.from === 'tester' ? 'Tester' : 'You'}</span>
+                    <span className="text-xs text-text-muted">{new Date(req.at).toLocaleString()}</span>
+                  </div>
+                  <p className="whitespace-pre-wrap">{req.message}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reply to info request */}
+      {testCase.status === 'needs_info' && (
+        <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-5">
+          <h3 className="text-sm font-medium text-orange-500 mb-2">Tester needs more info</h3>
+          <p className="text-xs text-text-secondary mb-3">Provide the requested information so the tester can continue.</p>
+          <textarea
+            value={replyMessage}
+            onChange={(e) => setReplyMessage(e.target.value)}
+            placeholder="Type your response..."
+            rows={3}
+            className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-orange-500/50 resize-none"
+          />
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              onClick={() => replyMutation.mutate()}
+              disabled={!replyMessage.trim() || replyMutation.isPending}
+              className="px-4 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-500/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {replyMutation.isPending ? 'Sending...' : 'Send Reply'}
+            </button>
+            {replyMutation.isError && (
+              <p className="text-xs text-accent-danger">{(replyMutation.error as Error).message}</p>
+            )}
+          </div>
         </div>
       )}
 

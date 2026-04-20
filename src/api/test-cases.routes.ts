@@ -4,9 +4,11 @@ import { testerAuthPlugin } from '../middleware/tester-auth.js';
 import { TestCaseService } from '../services/test-case.service.js';
 import { AssignmentService } from '../services/assignment.service.js';
 import { Errors } from '../lib/errors.js';
-import { sendAdminNotification } from '../lib/email.js';
+import { EmailService, sendAdminNotification } from '../lib/email.js';
+import { TestCaseModel, type TestCase } from '../models/test-case.js';
+import sql from '../lib/db.js';
 
-const VALID_STATUSES = ['queued', 'assigned', 'in_progress', 'completed', 'cancelled', 'expired'];
+const VALID_STATUSES = ['queued', 'assigned', 'in_progress', 'completed', 'cancelled', 'expired', 'needs_info'];
 
 const createFlowTestSchema = {
   type: 'object',
@@ -249,6 +251,7 @@ export async function testCasesRoutes(app: FastifyInstance) {
         assigned_at: testCase.assigned_at?.toISOString() ?? null,
         completed_at: testCase.completed_at?.toISOString() ?? null,
         status_history: testCase.status_history,
+        info_requests: testCase.info_requests ?? [],
         created_at: testCase.created_at.toISOString(),
         updated_at: testCase.updated_at.toISOString(),
       };
@@ -285,6 +288,50 @@ export async function testCasesRoutes(app: FastifyInstance) {
     }>) => {
       const builder = request.builder!;
       return TestCaseService.getResults(request.params.id, builder.id);
+    });
+
+    // POST /api/v1/test-cases/:id/info-reply — builder responds to tester's info request
+    builderScope.post('/:id/info-reply', async (request: FastifyRequest<{
+      Params: { id: string };
+      Body: { message: string };
+    }>, reply: FastifyReply) => {
+      const builder = request.builder!;
+      const { message } = request.body;
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        throw Errors.badRequest('Message is required');
+      }
+      const testCase = await TestCaseModel.findById(request.params.id);
+      if (!testCase) throw Errors.notFound('Test case');
+      if (testCase.builder_id !== builder.id) throw Errors.forbidden('Not your test case');
+      if (testCase.status !== 'needs_info') {
+        throw Errors.conflict('NOT_NEEDS_INFO', 'Test case is not awaiting info', { current_status: testCase.status });
+      }
+
+      const entry = { from: 'builder' as const, message: message.trim(), at: new Date().toISOString(), user_id: builder.id };
+      const updated = await sql<TestCase[]>`
+        UPDATE test_cases
+        SET status = 'in_progress',
+            info_requests = info_requests || ${JSON.stringify(entry)}::jsonb,
+            status_history = status_history || ${JSON.stringify({ status: 'in_progress', at: new Date().toISOString(), note: 'Builder provided requested info' })}::jsonb
+        WHERE id = ${testCase.id}
+        RETURNING *
+      `;
+
+      // Notify tester that info was provided
+      if (testCase.assigned_tester_id) {
+        const [tester] = await sql<{ email: string; display_name: string }[]>`
+          SELECT email, display_name FROM testers WHERE id = ${testCase.assigned_tester_id}
+        `;
+        if (tester) {
+          EmailService.sendInfoProvided(tester.email, {
+            title: testCase.title,
+            shortId: testCase.short_id,
+            builderMessage: message.trim(),
+          }).catch(() => {});
+        }
+      }
+
+      reply.status(200).send({ status: 'in_progress', info_requests: updated[0]?.info_requests ?? [] });
     });
   });
 

@@ -82,6 +82,8 @@ export default function TaskExecutionPage() {
   const [completedSteps, setCompletedSteps] = useState<Map<number, StepResultData>>(new Map());
   const [isStarting, setIsStarting] = useState(false);
   const [showSubmission, setShowSubmission] = useState(false);
+  const [showInfoRequest, setShowInfoRequest] = useState(false);
+  const [infoMessage, setInfoMessage] = useState('');
 
   const { isRecording, isUploading, recordings, startRecording, stopRecording, removeRecording } = useScreenRecording(taskId);
 
@@ -144,6 +146,19 @@ export default function TaskExecutionPage() {
 
   const isAssessment = task?.type === 'onboarding_assessment';
   const isCompleted = task ? COMPLETED_STATUSES.has(task.status) : false;
+  const isNeedsInfo = task?.status === 'needs_info';
+
+  const handleRequestInfo = async () => {
+    if (!infoMessage.trim()) return;
+    try {
+      await testerApi.requestInfo(taskId, infoMessage.trim());
+      setInfoMessage('');
+      setShowInfoRequest(false);
+      queryClient.invalidateQueries({ queryKey: ['tester-task', taskId] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to send info request');
+    }
+  };
 
   const { data: completedResult } = useQuery({
     queryKey: ['tester-task-result', taskId],
@@ -248,14 +263,24 @@ export default function TaskExecutionPage() {
             <h2 className="text-xl font-semibold text-text-primary">{task.title}</h2>
             {task.description && <p className="text-sm text-text-secondary mt-1">{task.description}</p>}
           </div>
-          {isStarted && (
-            <RecordingToggle
-              isRecording={isRecording}
-              isUploading={isUploading}
-              onStart={() => startRecording().catch(() => {})}
-              onStop={() => stopRecording().catch(() => {})}
-            />
-          )}
+          <div className="flex items-center gap-2">
+            {isStarted && (
+              <button
+                onClick={() => setShowInfoRequest(!showInfoRequest)}
+                className="px-3 py-1.5 border border-orange-500/20 text-orange-500 text-xs font-medium rounded-lg hover:bg-orange-500/10 transition-colors"
+              >
+                Need Info
+              </button>
+            )}
+            {isStarted && (
+              <RecordingToggle
+                isRecording={isRecording}
+                isUploading={isUploading}
+                onStart={() => startRecording().catch(() => {})}
+                onStop={() => stopRecording().catch(() => {})}
+              />
+            )}
+          </div>
         </div>
 
         <div className="mt-3 flex items-center gap-4 text-xs text-text-secondary">
@@ -269,7 +294,37 @@ export default function TaskExecutionPage() {
         </div>
       </div>
 
-      {!isStarted && (
+      {/* Info request form */}
+      {showInfoRequest && isStarted && (
+        <div className="mb-6 bg-orange-500/5 border border-orange-500/20 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-orange-500 mb-2">Request more info from builder</h4>
+          <p className="text-xs text-text-secondary mb-3">Describe what information is missing or what&apos;s blocking you from completing the test.</p>
+          <textarea
+            value={infoMessage}
+            onChange={(e) => setInfoMessage(e.target.value)}
+            placeholder="e.g. I can't find the checkout button mentioned in step 3. Is it behind a login? What credentials should I use?"
+            rows={3}
+            className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-orange-500/50 resize-none"
+          />
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              onClick={handleRequestInfo}
+              disabled={!infoMessage.trim()}
+              className="px-4 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-500/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Send Request
+            </button>
+            <button
+              onClick={() => { setShowInfoRequest(false); setInfoMessage(''); }}
+              className="px-4 py-1.5 text-text-secondary text-sm rounded-lg hover:bg-surface-secondary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isStarted && !isNeedsInfo && (
         <div className="mb-6">
           <div className="bg-accent-review/10 border border-accent-review/20 rounded-lg p-4">
             <p className="text-sm text-accent-review mb-3">
@@ -284,9 +339,41 @@ export default function TaskExecutionPage() {
         </div>
       )}
 
-      {isStarted && task.credentials && (
+      {(isStarted || isNeedsInfo) && task.credentials && (
         <div className="mb-6">
           <CredentialsPanel credentials={task.credentials} />
+        </div>
+      )}
+
+      {/* Info requests thread */}
+      {task.info_requests && task.info_requests.length > 0 && (
+        <div className="mb-6 bg-surface border border-orange-500/20 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-orange-500 mb-3">Info Requests</h4>
+          <div className="space-y-2">
+            {task.info_requests.map((req: { from: string; message: string; at: string }, i: number) => (
+              <div key={i} className={`flex gap-3 ${req.from === 'tester' ? 'justify-end' : ''}`}>
+                <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                  req.from === 'tester'
+                    ? 'bg-orange-500/10 text-text-primary'
+                    : 'bg-accent-flow/10 text-text-primary'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium">{req.from === 'tester' ? 'You' : 'Builder'}</span>
+                    <span className="text-xs text-text-muted">{new Date(req.at).toLocaleString()}</span>
+                  </div>
+                  <p className="whitespace-pre-wrap">{req.message}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Needs info waiting state */}
+      {isNeedsInfo && (
+        <div className="mb-6 bg-orange-500/5 border border-orange-500/20 rounded-lg p-4 text-center">
+          <p className="text-sm text-orange-500 font-medium">Waiting for builder to respond</p>
+          <p className="text-xs text-text-secondary mt-1">You&apos;ll get an email when the builder provides the requested info. The test will resume automatically.</p>
         </div>
       )}
 

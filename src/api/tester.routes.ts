@@ -10,6 +10,7 @@ import { TesterModel } from '../models/tester.js';
 import { TesterInviteModel } from '../models/tester-invite.js';
 import { pickRandomAssessment } from '../services/sandbox-scoring.service.js';
 import { Errors } from '../lib/errors.js';
+import { EmailService } from '../lib/email.js';
 import { generateInviteCode } from '../lib/invite-code.js';
 import sql from '../lib/db.js';
 
@@ -146,7 +147,7 @@ export async function testerRoutes(app: FastifyInstance) {
 
     const [{ count }] = await sql<[{ count: number }]>`
       SELECT count(*)::int AS count FROM test_cases tc
-      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('assigned', 'in_progress') ${searchCond}
+      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('assigned', 'in_progress', 'needs_info') ${searchCond}
     `;
 
     const tasks = await sql<Array<{
@@ -155,7 +156,7 @@ export async function testerRoutes(app: FastifyInstance) {
     }>>`
       SELECT tc.id, tc.title, tc.description, tc.url, tc.status, tc.steps, tc.environment, tc.assigned_at
       FROM test_cases tc
-      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('assigned', 'in_progress') ${searchCond}
+      WHERE tc.assigned_tester_id = ${tester.id} AND tc.status IN ('assigned', 'in_progress', 'needs_info') ${searchCond}
       ORDER BY tc.assigned_at DESC LIMIT ${limit} OFFSET ${offset}
     `;
 
@@ -331,7 +332,7 @@ export async function testerRoutes(app: FastifyInstance) {
     const hasCredentials = !!task.credentials;
     let decryptedCredentials: Record<string, unknown> | null = null;
 
-    if (task.status === 'in_progress' && task.credentials) {
+    if ((task.status === 'in_progress' || task.status === 'needs_info') && task.credentials) {
       try {
         decryptedCredentials = CredentialService.decrypt(
           task.credentials as { encrypted: string; key_version: number },
@@ -358,6 +359,7 @@ export async function testerRoutes(app: FastifyInstance) {
       has_credentials: hasCredentials,
       credentials: decryptedCredentials,
       assigned_at: task.assigned_at?.toISOString() ?? null,
+      info_requests: task.info_requests ?? [],
       step_results: stepResults.map((sr) => ({
         id: sr.id,
         step_index: sr.step_index,
@@ -558,6 +560,51 @@ export async function testerRoutes(app: FastifyInstance) {
     });
 
     reply.status(200).send({ status: 'completed' });
+  });
+
+  // POST /tasks/:id/request-info — tester requests more info from builder
+  app.post('/tasks/:id/request-info', async (request: FastifyRequest<{
+    Params: { id: string };
+    Body: { message: string };
+  }>, reply: FastifyReply) => {
+    const tester = request.tester!;
+    const { id } = request.params;
+    const { message } = request.body;
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      throw Errors.badRequest('Message describing what info is needed is required');
+    }
+
+    const task = await TestCaseModel.findById(id);
+    if (!task) throw Errors.notFound('Task');
+    if (task.assigned_tester_id !== tester.id) throw Errors.forbidden('This task is not assigned to you');
+    if (task.status !== 'in_progress') {
+      throw Errors.conflict('CANNOT_REQUEST_INFO', 'Can only request info while test is in progress', { current_status: task.status });
+    }
+
+    const entry = { from: 'tester' as const, message: message.trim(), at: new Date().toISOString(), user_id: tester.id };
+    const [updated] = await sql`
+      UPDATE test_cases
+      SET status = 'needs_info',
+          info_requests = info_requests || ${JSON.stringify(entry)}::jsonb,
+          status_history = status_history || ${JSON.stringify({ status: 'needs_info', at: new Date().toISOString(), tester_id: tester.id, note: message.trim() })}::jsonb
+      WHERE id = ${task.id}
+      RETURNING *
+    `;
+
+    // Notify builder via email
+    const [builder] = await sql<{ email: string; display_name: string }[]>`
+      SELECT email, display_name FROM builders WHERE id = ${task.builder_id}
+    `;
+    if (builder) {
+      EmailService.sendInfoRequested(builder.email, {
+        title: task.title,
+        shortId: task.short_id,
+        testerMessage: message.trim(),
+      }).catch(() => {});
+    }
+
+    reply.status(200).send({ status: 'needs_info', info_requests: updated?.info_requests ?? [] });
   });
 
   // POST /upload/presign — get S3 presigned URL
