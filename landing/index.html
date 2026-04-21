@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BlendedAgents — Human-as-a-Tool for AI Agents</title>
+  <title>BlendedAgents — Human-as-a-Tool for AI Agents | QA Testing API</title>
+  <meta property="article:modified_time" content="2026-04-21T00:00:00Z">
   <meta name="description" content="The first Human-as-a-Tool platform for AI agents. Your AI builds it. A real human verifies it. Before you ship, not after. QA in one API call.">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="author" content="BlendedAgents">
@@ -151,6 +152,45 @@
           "text": "We're starting with testing because it's where AI builders feel the most pain. But BlendedAgents is designed as a general-purpose Human API — any task where AI needs human judgment, verification, or real-world interaction. Testing is chapter one."
         }
       }
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "DefinedTerm",
+    "name": "Human-as-a-Tool",
+    "description": "A software architecture pattern where AI agents invoke human capabilities through structured APIs, treating humans as callable tools in an automated pipeline. Instead of humans managing AI, the AI orchestrates human judgment on demand.",
+    "url": "https://blendedagents.com/human-as-a-tool",
+    "inDefinedTermSet": {
+      "@type": "DefinedTermSet",
+      "name": "AI Agent Architecture Glossary",
+      "url": "https://blendedagents.com/glossary/human-as-a-tool"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "BlendedAgents — Human-as-a-Tool for AI Agents | QA Testing API",
+    "speakable": {
+      "@type": "SpeakableSpecification",
+      "cssSelector": ["#what-is-human-as-a-tool", ".hero-tagline"]
+    },
+    "url": "https://blendedagents.com"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to Use Human-as-a-Tool for AI Agent QA Testing",
+    "description": "Three steps to get human QA verification for your AI-built features using BlendedAgents.",
+    "step": [
+      {"@type": "HowToStep", "position": 1, "name": "Build with AI", "text": "Use any AI coding agent (Claude Code, Cursor, Bolt, Lovable) to build your feature. The agent writes the code and identifies what needs testing."},
+      {"@type": "HowToStep", "position": 2, "name": "Agent sends test to a human", "text": "Your AI agent reads skill.md and submits a test case via the BlendedAgents API. A vetted human tester picks it up and tests on a real device with screen recording."},
+      {"@type": "HowToStep", "position": 3, "name": "Structured results flow back", "text": "Pass/fail per step, severity ratings, screenshots, and screen recordings are returned as structured JSON. Your agent processes the results and acts on them."}
     ]
   }
   </script>
@@ -1231,11 +1271,11 @@
       accepting early access builders
     </div>
 
-    <h1 class="hero-code">
+    <div class="hero-code" aria-hidden="true">
       <span class="kw">await</span> <span class="obj">human</span><span class="dot">.</span><span class="fn">verify</span><span class="paren">()</span>
-    </h1>
+    </div>
 
-    <p class="hero-tagline">The first <strong>Human-as-a-Tool</strong> for AI agents</p>
+    <h1 class="hero-tagline">The first <strong>Human-as-a-Tool</strong> for AI agents</h1>
 
     <p class="hero-support">Your AI builds feature by feature. A real human verifies feature by feature. Before you ship, not after.</p>
 
@@ -1253,6 +1293,17 @@
   </section>
 
   <!-- VISION TEASER -->
+  <section class="reveal" id="what-is-human-as-a-tool" style="max-width:780px;margin:0 auto 48px;padding:0 24px;text-align:left;">
+    <h2 class="section-title" style="text-align:center;">What is Human-as-a-Tool?</h2>
+    <p style="font-size:1.05rem;color:#c4bfd0;line-height:1.75;margin-bottom:1rem;">
+      <strong style="color:#e2dfe8;">Human-as-a-Tool</strong> is a software architecture pattern where AI agents invoke human capabilities through structured APIs — treating humans as callable tools in an automated pipeline. Instead of humans managing AI, the AI orchestrates human judgment when it needs verification, subjective evaluation, or real-world interaction that automation cannot provide.
+    </p>
+    <p style="font-size:0.95rem;color:#9b95a8;line-height:1.7;">
+      <a href="/" style="color:#34d399;">BlendedAgents</a> pioneered this paradigm in 2026, starting with <a href="/glossary/agentic-qa" style="color:#34d399;">agentic QA testing</a>: your AI coding agent submits a test case via API, a vetted human tester executes it on a real device with screen recording, and structured results flow back into the agent's workflow — all without human developer involvement. It is <a href="/glossary/human-in-the-loop-testing" style="color:#34d399;">human-in-the-loop testing</a> redesigned for the age of autonomous AI agents.
+    </p>
+    <p style="margin-top:1rem;"><a href="/human-as-a-tool" style="color:#34d399;font-size:0.9rem;">Learn more about Human-as-a-Tool &rarr;</a></p>
+  </section>
+
   <section class="vision reveal">
     <div class="vision-grid">
       <div class="vision-card">
@@ -1604,7 +1655,9 @@
   <footer class="footer">
     <span>&copy; 2026 BlendedAgents</span>
     <div class="footer-links">
-      <a href="/skill.md">skill.md</a>
+      <a href="/human-as-a-tool">Human-as-a-Tool</a>
+      <a href="/glossary/human-as-a-tool">Glossary</a>
+      <a href="/skill.md">API Docs</a>
       <a href="https://github.com/blendedagents" target="_blank" rel="noopener">GitHub</a>
       <a href="https://x.com/blendedagents" target="_blank" rel="noopener">X</a>
     </div>

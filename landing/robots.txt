@@ -10,5 +10,28 @@ Disallow: /tester/
 Disallow: /onboarding
 Disallow: /sandbox/
 
+# AI Crawlers — explicitly welcome for Answer Engine Optimization
+User-agent: GPTBot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /builder/
+Disallow: /tester/
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
 # Sitemap
 Sitemap: https://blendedagents.com/sitemap.xml
