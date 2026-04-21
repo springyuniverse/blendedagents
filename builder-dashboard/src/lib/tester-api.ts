@@ -51,12 +51,17 @@ export interface Task {
 export interface TaskDetail {
   id: string;
   type: string;
+  template_type: 'flow_test' | 'review_test';
   title: string;
   description: string | null;
   url: string | null;
   status: string;
   steps: Array<{ instruction: string; expected?: string }>;
   expected_behavior: string | null;
+  context: string | null;
+  devices_to_check: string[];
+  focus_areas: string[];
+  ignore_areas: string | null;
   environment: string | null;
   has_credentials: boolean;
   credentials: Record<string, string> | null;
@@ -189,6 +194,23 @@ export const testerApi = {
 
   submitTest: (taskId: string, data: { verdict: string; summary: string; recording_url?: string; annotations_url?: string }) =>
     request<{ status: string }>(`/tasks/${taskId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  submitReviewFindings: (taskId: string, data: {
+    verdict: string;
+    summary?: string;
+    findings: Array<{
+      severity: string;
+      category: string;
+      description: string;
+      screenshot_url?: string;
+      device: string;
+      location: string;
+    }>;
+  }) =>
+    request<{ status: string }>(`/tasks/${taskId}/findings`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

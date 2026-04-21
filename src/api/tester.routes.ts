@@ -349,12 +349,17 @@ export async function testerRoutes(app: FastifyInstance) {
     return {
       id: task.id,
       type: task.type,
+      template_type: task.template_type,
       title: task.title,
       description: task.description,
       url: task.url,
       status: task.status,
       steps: task.steps,
       expected_behavior: task.expected_behavior,
+      context: task.context,
+      devices_to_check: task.devices_to_check,
+      focus_areas: task.focus_areas,
+      ignore_areas: task.ignore_areas,
       environment: task.environment,
       has_credentials: hasCredentials,
       credentials: decryptedCredentials,
@@ -587,6 +592,40 @@ export async function testerRoutes(app: FastifyInstance) {
       steps,
     });
 
+    reply.status(200).send({ status: 'completed' });
+  });
+
+  // POST /tasks/:id/findings — submit review test findings
+  app.post('/tasks/:id/findings', async (request: FastifyRequest<{
+    Params: { id: string };
+    Body: {
+      verdict: string;
+      summary?: string;
+      findings: Array<{
+        severity: string;
+        category: string;
+        description: string;
+        screenshot_url?: string;
+        device: string;
+        location: string;
+      }>;
+    };
+  }>, reply: FastifyReply) => {
+    const tester = request.tester!;
+    const { id } = request.params;
+    await requireActiveOrAssessment(tester, id);
+
+    const task = await TestCaseModel.findById(id);
+    if (!task) throw Errors.notFound('Task');
+    if (task.assigned_tester_id !== tester.id) throw Errors.forbidden('This task is not assigned to you');
+    if (task.status !== 'in_progress') {
+      throw Errors.conflict('CANNOT_SUBMIT', `Test case cannot be submitted because it is ${task.status}`, { current_status: task.status });
+    }
+    if (task.template_type !== 'review_test') {
+      throw Errors.badRequest('This endpoint is for review tests only');
+    }
+
+    await AssignmentService.submitReviewResults(id, tester.id, request.body);
     reply.status(200).send({ status: 'completed' });
   });
 

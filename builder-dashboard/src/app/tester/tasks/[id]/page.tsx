@@ -199,6 +199,8 @@ export default function TaskExecutionPage() {
 
   if (!task) return <div className="text-sm text-text-secondary py-8 text-center">Task not found</div>;
 
+  const isReviewTest = task?.template_type === 'review_test';
+
   // A step counts as truly done if it has a result that isn't missing_info
   const isStepDone = (i: number) => {
     const r = completedSteps.get(i);
@@ -328,7 +330,53 @@ export default function TaskExecutionPage() {
         </div>
       )}
 
-      {isStarted && (
+      {/* Review test: context, devices, focus areas */}
+      {isReviewTest && isStarted && (
+        <div className="mb-6 space-y-4">
+          {task.context && (
+            <div className="bg-surface border border-border rounded-lg p-4">
+              <h4 className="text-xs font-semibold text-text-secondary mb-1">Context</h4>
+              <p className="text-sm text-text-primary whitespace-pre-wrap">{task.context}</p>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-4">
+            {task.devices_to_check && task.devices_to_check.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-text-secondary mb-1">Devices to check</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {task.devices_to_check.map(d => (
+                    <span key={d} className="px-2 py-0.5 bg-accent-review/10 text-accent-review text-xs rounded-full">{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {task.focus_areas && task.focus_areas.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-text-secondary mb-1">Focus areas</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {task.focus_areas.map(a => (
+                    <span key={a} className="px-2 py-0.5 bg-surface-secondary text-text-secondary text-xs rounded-full capitalize">{a}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {task.ignore_areas && (
+            <div>
+              <h4 className="text-xs font-semibold text-text-secondary mb-1">Ignore</h4>
+              <p className="text-sm text-text-secondary">{task.ignore_areas}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Review test: findings submission */}
+      {isReviewTest && isStarted && (
+        <ReviewFindingsForm taskId={taskId} recordings={recordings} onSubmitComplete={handleSubmitComplete} />
+      )}
+
+      {/* Flow test: progress bar */}
+      {!isReviewTest && isStarted && (
         <div className="mb-4 flex items-center gap-3">
           <div className="flex-1 bg-surface-secondary rounded-full h-1.5">
             <div className="bg-accent-review h-1.5 rounded-full transition-all"
@@ -338,7 +386,7 @@ export default function TaskExecutionPage() {
         </div>
       )}
 
-      {!isRecording && recordings.length > 0 && (
+      {!isRecording && recordings.length > 0 && !isReviewTest && (
         <div className="mb-4 space-y-3">
           {recordings.map((rec, i) => (
             <div key={rec.id} className="bg-surface border border-border rounded-lg shadow-soft overflow-hidden">
@@ -384,25 +432,29 @@ export default function TaskExecutionPage() {
         </div>
       )}
 
-      <div className="space-y-3">
-        {task.steps.map((step, index) => (
-          <StepResult
-            key={index}
-            stepIndex={index}
-            instruction={step.instruction}
-            expected={step.expected}
-            taskId={taskId}
-            isActive={isStarted && index === currentStepIndex}
-            isCompleted={isStepDone(index)}
-            result={completedSteps.get(index)}
-            disabled={!isStarted || (index !== currentStepIndex && !isStepDone(index))}
-            extensionScreenshots={stepScreenshots.get(index) ?? null}
-            onComplete={handleStepComplete}
-          />
-        ))}
-      </div>
+      {/* Flow test: steps */}
+      {!isReviewTest && (
+        <div className="space-y-3">
+          {task.steps.map((step, index) => (
+            <StepResult
+              key={index}
+              stepIndex={index}
+              instruction={step.instruction}
+              expected={step.expected}
+              taskId={taskId}
+              isActive={isStarted && index === currentStepIndex}
+              isCompleted={isStepDone(index)}
+              result={completedSteps.get(index)}
+              disabled={!isStarted || (index !== currentStepIndex && !isStepDone(index))}
+              extensionScreenshots={stepScreenshots.get(index) ?? null}
+              onComplete={handleStepComplete}
+            />
+          ))}
+        </div>
+      )}
 
-      {isStarted && allStepsCompleted && !showSubmission && (
+      {/* Flow test: complete button */}
+      {!isReviewTest && isStarted && allStepsCompleted && !showSubmission && (
         <div className="mt-6">
           <button onClick={() => setShowSubmission(true)}
             className="w-full bg-accent-review text-white px-4 py-3 rounded-lg text-sm font-medium hover:bg-accent-review/90 transition-colors">
@@ -411,7 +463,7 @@ export default function TaskExecutionPage() {
         </div>
       )}
 
-      {showSubmission && (
+      {!isReviewTest && showSubmission && (
         <div className="mt-6">
           <TestSubmission
             taskId={taskId}
@@ -423,7 +475,7 @@ export default function TaskExecutionPage() {
         </div>
       )}
 
-      {pendingScreenshots.length > 0 && task && (
+      {!isReviewTest && pendingScreenshots.length > 0 && task && (
         <CaptureTray
           screenshots={pendingScreenshots}
           steps={task.steps}
@@ -432,6 +484,167 @@ export default function TaskExecutionPage() {
           onDismiss={dismissScreenshot}
         />
       )}
+    </div>
+  );
+}
+
+const SEVERITY_OPTIONS = ['critical', 'major', 'minor'];
+const CATEGORY_OPTIONS = ['functionality', 'layout', 'content', 'typography', 'forms', 'images'];
+
+interface Finding {
+  severity: string;
+  category: string;
+  description: string;
+  screenshot_url?: string;
+  device: string;
+  location: string;
+}
+
+function ReviewFindingsForm({ taskId, recordings, onSubmitComplete }: {
+  taskId: string;
+  recordings: Array<{ id: string; key: string | null }>;
+  onSubmitComplete: () => void;
+}) {
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [verdict, setVerdict] = useState('pass');
+  const [summary, setSummary] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Current finding being edited
+  const [severity, setSeverity] = useState('major');
+  const [category, setCategory] = useState('functionality');
+  const [description, setDescription] = useState('');
+  const [device, setDevice] = useState('');
+  const [location, setLocation] = useState('');
+
+  const addFinding = () => {
+    if (!description.trim() || !device.trim() || !location.trim()) {
+      alert('Description, device, and location are required for each finding.');
+      return;
+    }
+    setFindings([...findings, { severity, category, description: description.trim(), device: device.trim(), location: location.trim() }]);
+    setDescription('');
+    setDevice('');
+    setLocation('');
+  };
+
+  const removeFinding = (i: number) => {
+    setFindings(findings.filter((_, j) => j !== i));
+  };
+
+  const handleSubmit = async () => {
+    if (!summary.trim()) { alert('Summary is required.'); return; }
+    setIsSubmitting(true);
+    try {
+      const recordingUrl = recordings.find(r => r.key)?.key;
+      await testerApi.submitReviewFindings(taskId, {
+        verdict,
+        summary: summary.trim(),
+        findings,
+        ...(recordingUrl ? { recording_url: recordingUrl } : {}),
+      } as Parameters<typeof testerApi.submitReviewFindings>[1]);
+      onSubmitComplete();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to submit');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const inputClass = 'w-full bg-surface-secondary border border-border rounded-lg px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-review/50';
+
+  return (
+    <div className="space-y-6">
+      {/* Add finding form */}
+      <div className="bg-surface border border-border rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-text-primary">Report a Finding</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">Severity *</label>
+            <select value={severity} onChange={e => setSeverity(e.target.value)} className={inputClass}>
+              {SEVERITY_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">Category *</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className={inputClass}>
+              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-text-secondary mb-1">Description *</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)}
+            placeholder="What's wrong and where?"
+            rows={2} className={`${inputClass} resize-none`} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">Device / Browser *</label>
+            <input value={device} onChange={e => setDevice(e.target.value)} placeholder="e.g. Chrome desktop, iPhone Safari" className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1">Location on page *</label>
+            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Hero section, footer nav" className={inputClass} />
+          </div>
+        </div>
+        <button onClick={addFinding} disabled={!description.trim() || !device.trim() || !location.trim()}
+          className="px-4 py-1.5 bg-accent-review text-white text-sm font-medium rounded-lg hover:bg-accent-review/90 disabled:opacity-50 transition-colors">
+          + Add Finding
+        </button>
+      </div>
+
+      {/* Findings list */}
+      {findings.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-text-primary">{findings.length} Finding{findings.length !== 1 ? 's' : ''}</h3>
+          {findings.map((f, i) => (
+            <div key={i} className="bg-surface border border-border rounded-lg p-3 flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                    f.severity === 'critical' ? 'bg-accent-danger/10 text-accent-danger' :
+                    f.severity === 'major' ? 'bg-accent-warning/10 text-accent-warning' :
+                    'bg-text-muted/10 text-text-secondary'
+                  }`}>{f.severity}</span>
+                  <span className="text-xs text-text-muted capitalize">{f.category}</span>
+                  <span className="text-xs text-text-muted">on {f.device}</span>
+                </div>
+                <p className="text-sm text-text-primary">{f.description}</p>
+                <p className="text-xs text-text-muted mt-0.5">{f.location}</p>
+              </div>
+              <button onClick={() => removeFinding(i)} className="text-text-muted hover:text-accent-danger p-1">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Submit */}
+      <div className="bg-surface border border-border rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-text-primary">Submit Review</h3>
+        <div>
+          <label className="block text-xs font-medium text-text-secondary mb-1">Verdict *</label>
+          <select value={verdict} onChange={e => setVerdict(e.target.value)} className={`${inputClass} max-w-[200px]`}>
+            <option value="pass">Pass</option>
+            <option value="fail">Fail</option>
+            <option value="partial">Partial</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-text-secondary mb-1">Summary *</label>
+          <textarea value={summary} onChange={e => setSummary(e.target.value)}
+            placeholder="Overall assessment of the app..."
+            rows={3} className={`${inputClass} resize-none`} />
+        </div>
+        <button onClick={handleSubmit} disabled={isSubmitting || !summary.trim()}
+          className="w-full bg-accent-review text-white px-4 py-3 rounded-lg text-sm font-medium hover:bg-accent-review/90 disabled:opacity-50 transition-colors">
+          {isSubmitting ? 'Submitting...' : `Submit Review${findings.length > 0 ? ` with ${findings.length} finding${findings.length !== 1 ? 's' : ''}` : ''}`}
+        </button>
+      </div>
     </div>
   );
 }
