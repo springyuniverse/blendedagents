@@ -257,7 +257,7 @@ export const TestCaseService = {
     if (testCase.template_type !== 'flow_test') {
       throw Errors.badRequest('Results view is only available for flow tests');
     }
-    return buildFlowResults(testCase, testCaseId);
+    return buildFlowResults(testCase, testCase.id);
   },
 
   async getResults(testCaseId: string, builderId: string) {
@@ -266,15 +266,18 @@ export const TestCaseService = {
       throw Errors.notFound('Test case');
     }
 
-    const testResult = await TestResultModel.findByTestCase(testCaseId);
+    // Always use UUID for downstream queries (input may be short_id)
+    const uuid = testCase.id;
+
+    const testResult = await TestResultModel.findByTestCase(uuid);
 
     if (testCase.template_type === 'flow_test') {
-      return buildFlowResults(testCase, testCaseId);
+      return buildFlowResults(testCase, uuid);
     }
 
     // review_test
-    const findings = await FindingModel.findByTestCase(testCaseId);
-    const counts = await FindingModel.countByTestCase(testCaseId);
+    const findings = await FindingModel.findByTestCase(uuid);
+    const counts = await FindingModel.countByTestCase(uuid);
     const bonusCredits =
       counts.critical * 3 +
       counts.major * 2 +
