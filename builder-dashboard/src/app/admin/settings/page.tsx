@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPlatformSettings, updatePlatformSettings, type AdminNotifications } from '@/lib/admin-api';
-import { Check, X, Plus } from 'lucide-react';
+import { getPlatformSettings, updatePlatformSettings, type AdminNotifications, getRegionalRates, updateRegionalRate, getCommissionRate, updateCommissionRate, getWithdrawals, updateWithdrawal, type RegionalRate, type WithdrawalRequest } from '@/lib/admin-api';
+import { Check, X, Plus, DollarSign } from 'lucide-react';
 
 function ToggleSwitch({ checked, onChange, label, description }: {
   checked: boolean; onChange: (v: boolean) => void; label: string; description?: string;
@@ -209,6 +209,169 @@ export default function AdminSettingsPage() {
             <p className="text-xs text-accent-danger">{(mutation.error as Error).message}</p>
           )}
         </div>
+        {/* Platform Commission */}
+        <CommissionSection />
+
+        {/* Regional Rates */}
+        <RatesSection />
+
+        {/* Withdrawal Requests */}
+        <WithdrawalsSection />
+      </div>
+    </div>
+  );
+}
+
+function CommissionSection() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['admin-commission'], queryFn: getCommissionRate });
+  const [pct, setPct] = useState(50);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => { if (data) { setPct(data.platform_commission_pct); setDirty(false); } }, [data]);
+
+  const mutation = useMutation({
+    mutationFn: () => updateCommissionRate(pct),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-commission'] }); setDirty(false); },
+  });
+
+  return (
+    <div className="bg-surface border border-border rounded-lg p-6 space-y-4">
+      <h2 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+        <DollarSign className="w-4 h-4" strokeWidth={1.5} /> Platform Commission
+      </h2>
+      <p className="text-xs text-text-muted -mt-2">Percentage deducted from tester earnings. Testers see their earnings after this deduction.</p>
+      <div className="flex items-center gap-3">
+        <input type="number" min={0} max={100} step={0.5} value={pct}
+          onChange={e => { setPct(parseFloat(e.target.value) || 0); setDirty(true); }}
+          className="w-24 px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-admin/50" />
+        <span className="text-sm text-text-secondary">%</span>
+        {dirty && (
+          <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
+            className="px-3 py-1.5 bg-accent-admin text-white text-xs font-medium rounded-lg hover:bg-accent-admin/90 disabled:opacity-50 transition-colors">
+            {mutation.isPending ? 'Saving...' : 'Save'}
+          </button>
+        )}
+      </div>
+      {mutation.isSuccess && !dirty && <p className="text-xs text-accent-review">Commission rate saved.</p>}
+    </div>
+  );
+}
+
+function RatesSection() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['admin-rates'], queryFn: getRegionalRates });
+
+  const mutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: { base_pay_cents?: number; per_step_rate_cents?: number; is_active?: boolean } }) =>
+      updateRegionalRate(id, updates),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-rates'] }),
+  });
+
+  if (isLoading || !data) return null;
+
+  return (
+    <div className="bg-surface border border-border rounded-lg p-6 space-y-4">
+      <h2 className="text-sm font-semibold text-text-primary">Tester Pay Rates by Region</h2>
+      <p className="text-xs text-text-muted -mt-2">Base pay per test + rate per step. Testers are paid these amounts before platform commission.</p>
+      <div className="space-y-3">
+        {data.rates.map(rate => (
+          <RateRow key={rate.id} rate={rate} onSave={(id, updates) => mutation.mutate({ id, updates })} saving={mutation.isPending} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RateRow({ rate, onSave, saving }: { rate: RegionalRate; onSave: (id: string, updates: { base_pay_cents?: number; per_step_rate_cents?: number; is_active?: boolean }) => void; saving: boolean }) {
+  const [base, setBase] = useState(rate.base_pay_cents);
+  const [step, setStep] = useState(rate.per_step_rate_cents);
+  const [active, setActive] = useState(rate.is_active);
+  const dirty = base !== rate.base_pay_cents || step !== rate.per_step_rate_cents || active !== rate.is_active;
+
+  useEffect(() => { setBase(rate.base_pay_cents); setStep(rate.per_step_rate_cents); setActive(rate.is_active); }, [rate]);
+
+  const inputClass = 'w-20 px-2 py-1.5 bg-surface-secondary border border-border rounded-lg text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-admin/50';
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <div className="w-32">
+        <span className={`text-sm font-medium ${active ? 'text-text-primary' : 'text-text-muted line-through'}`}>
+          {rate.label || rate.region}
+        </span>
+      </div>
+      <div className="flex items-center gap-1">
+        <label className="text-xs text-text-muted">Base:</label>
+        <input type="number" min={0} value={base} onChange={e => setBase(parseInt(e.target.value) || 0)} className={inputClass} />
+        <span className="text-xs text-text-muted">&#162;</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <label className="text-xs text-text-muted">Step:</label>
+        <input type="number" min={0} value={step} onChange={e => setStep(parseInt(e.target.value) || 0)} className={inputClass} />
+        <span className="text-xs text-text-muted">&#162;</span>
+      </div>
+      <button onClick={() => { setActive(!active); }}
+        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${active ? 'bg-accent-review/10 text-accent-review' : 'bg-text-muted/10 text-text-muted'}`}>
+        {active ? 'Active' : 'Off'}
+      </button>
+      {dirty && (
+        <button onClick={() => onSave(rate.id, { base_pay_cents: base, per_step_rate_cents: step, is_active: active })} disabled={saving}
+          className="px-2 py-1 bg-accent-admin text-white text-xs font-medium rounded-lg hover:bg-accent-admin/90 disabled:opacity-50 transition-colors">
+          Save
+        </button>
+      )}
+    </div>
+  );
+}
+
+function WithdrawalsSection() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['admin-withdrawals'], queryFn: () => getWithdrawals({ limit: 50 }) });
+
+  const mutation = useMutation({
+    mutationFn: ({ id, status, admin_notes }: { id: string; status: string; admin_notes?: string }) =>
+      updateWithdrawal(id, { status, admin_notes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-withdrawals'] }),
+  });
+
+  if (isLoading || !data || data.withdrawals.length === 0) return null;
+
+  return (
+    <div className="bg-surface border border-border rounded-lg p-6 space-y-4">
+      <h2 className="text-sm font-semibold text-text-primary">Withdrawal Requests</h2>
+      <div className="space-y-2">
+        {data.withdrawals.map(w => (
+          <div key={w.id} className="flex items-center justify-between gap-4 p-3 bg-surface-secondary rounded-lg">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-text-primary">{w.tester_name}</span>
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                  w.status === 'pending' ? 'bg-accent-warning/10 text-accent-warning' :
+                  w.status === 'completed' ? 'bg-accent-review/10 text-accent-review' :
+                  w.status === 'rejected' ? 'bg-accent-danger/10 text-accent-danger' :
+                  'bg-accent-flow/10 text-accent-flow'
+                }`}>{w.status}</span>
+              </div>
+              <div className="text-xs text-text-muted mt-0.5">
+                ${(w.amount_cents / 100).toFixed(2)} to {w.paypal_email} &middot; {new Date(w.created_at).toLocaleDateString()}
+              </div>
+            </div>
+            {w.status === 'pending' && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => mutation.mutate({ id: w.id, status: 'completed', admin_notes: 'Paid via PayPal' })}
+                  disabled={mutation.isPending}
+                  className="px-3 py-1.5 bg-accent-review text-white text-xs font-medium rounded-lg hover:bg-accent-review/90 disabled:opacity-50 transition-colors">
+                  Mark Paid
+                </button>
+                <button onClick={() => mutation.mutate({ id: w.id, status: 'rejected', admin_notes: 'Rejected by admin' })}
+                  disabled={mutation.isPending}
+                  className="px-3 py-1.5 border border-accent-danger/20 text-accent-danger text-xs font-medium rounded-lg hover:bg-accent-danger/10 disabled:opacity-50 transition-colors">
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

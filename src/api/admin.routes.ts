@@ -225,7 +225,7 @@ export async function adminRoutes(app: FastifyInstance) {
       sql`
         SELECT t.id, t.display_name, t.email, t.region, t.skills, t.languages, t.devices,
           t.is_active, t.is_available, t.onboarded, t.tasks_completed, t.tasks_total,
-          t.avg_completion_minutes, t.earnings_cents, t.max_invites, t.timezone, t.created_at, t.updated_at, t.last_login_at
+          t.avg_completion_minutes, t.earnings_cents, t.max_invites, t.timezone, t.paypal_email, t.created_at, t.updated_at, t.last_login_at
         FROM testers t
         WHERE 1=1 ${searchFrag} ${statusFrag}
         ORDER BY t.created_at DESC
@@ -599,6 +599,113 @@ export async function adminRoutes(app: FastifyInstance) {
       per_page: limit,
       total_pages: Math.ceil(parseInt(count, 10) / limit),
     };
+  });
+
+  // ── Regional Rates ───────────────────────────────────────────
+
+  // GET /api/v1/admin/rates — list all regional rates
+  app.get('/rates', async () => {
+    const rates = await sql`SELECT * FROM regional_rates ORDER BY region`;
+    return { rates };
+  });
+
+  // PATCH /api/v1/admin/rates/:id — update a regional rate
+  app.patch('/rates/:id', async (request: FastifyRequest<{
+    Params: { id: string };
+    Body: { base_pay_cents?: number; per_step_rate_cents?: number; is_active?: boolean };
+  }>) => {
+    const { id } = request.params;
+    const body = request.body as Record<string, unknown>;
+    const updates: Record<string, unknown> = {};
+    if (typeof body.base_pay_cents === 'number') updates.base_pay_cents = body.base_pay_cents;
+    if (typeof body.per_step_rate_cents === 'number') updates.per_step_rate_cents = body.per_step_rate_cents;
+    if (typeof body.is_active === 'boolean') updates.is_active = body.is_active;
+    if (Object.keys(updates).length === 0) throw Errors.badRequest('No fields to update');
+    const [updated] = await sql`UPDATE regional_rates SET ${sql(updates)} WHERE id = ${id} RETURNING *`;
+    if (!updated) throw Errors.notFound('Rate not found');
+    return updated;
+  });
+
+  // ── Platform Commission ─────────────────────────────────────
+
+  // GET /api/v1/admin/commission — get current commission rate
+  app.get('/commission', async () => {
+    const [settings] = await sql`SELECT platform_commission_pct FROM platform_settings WHERE id = 1`;
+    return { platform_commission_pct: parseFloat(settings?.platform_commission_pct ?? '50') };
+  });
+
+  // PATCH /api/v1/admin/commission — update commission rate
+  app.patch('/commission', async (request: FastifyRequest<{
+    Body: { platform_commission_pct: number };
+  }>) => {
+    const { platform_commission_pct } = request.body as { platform_commission_pct: number };
+    if (typeof platform_commission_pct !== 'number' || platform_commission_pct < 0 || platform_commission_pct > 100) {
+      throw Errors.badRequest('Commission must be between 0 and 100');
+    }
+    const [updated] = await sql`
+      UPDATE platform_settings SET platform_commission_pct = ${platform_commission_pct} WHERE id = 1
+      RETURNING platform_commission_pct
+    `;
+    return { platform_commission_pct: parseFloat(updated.platform_commission_pct) };
+  });
+
+  // ── Withdrawal Requests ─────────────────────────────────────
+
+  // GET /api/v1/admin/withdrawals — list all withdrawal requests
+  app.get('/withdrawals', async (request: FastifyRequest<{
+    Querystring: { status?: string; page?: string; limit?: string };
+  }>) => {
+    const q = request.query as { status?: string; page?: string; limit?: string };
+    const page = Math.max(parseInt(q.page || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(q.limit || '20', 10), 1), 100);
+    const offset = (page - 1) * limit;
+    const statusFilter = q.status ? sql`AND w.status = ${q.status}` : sql``;
+
+    const [{ count }] = await sql<[{ count: string }]>`
+      SELECT count(*)::text FROM withdrawal_requests w WHERE 1=1 ${statusFilter}
+    `;
+
+    const rows = await sql`
+      SELECT w.*, t.display_name AS tester_name, t.email AS tester_email
+      FROM withdrawal_requests w
+      JOIN testers t ON t.id = w.tester_id
+      WHERE 1=1 ${statusFilter}
+      ORDER BY w.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    return {
+      withdrawals: rows,
+      total: parseInt(count, 10),
+      page,
+      per_page: limit,
+      total_pages: Math.max(1, Math.ceil(parseInt(count, 10) / limit)),
+    };
+  });
+
+  // PATCH /api/v1/admin/withdrawals/:id — update withdrawal status (mark paid/rejected)
+  app.patch('/withdrawals/:id', async (request: FastifyRequest<{
+    Params: { id: string };
+    Body: { status: string; admin_notes?: string };
+  }>) => {
+    const { id } = request.params;
+    const { status, admin_notes } = request.body as { status: string; admin_notes?: string };
+    if (!['processing', 'completed', 'rejected'].includes(status)) {
+      throw Errors.badRequest('Status must be processing, completed, or rejected');
+    }
+
+    const updates: Record<string, unknown> = { status };
+    if (admin_notes) updates.admin_notes = admin_notes;
+
+    const [updated] = await sql`UPDATE withdrawal_requests SET ${sql(updates)} WHERE id = ${id} RETURNING *`;
+    if (!updated) throw Errors.notFound('Withdrawal request not found');
+
+    // If rejected, restore tester earnings
+    if (status === 'rejected') {
+      await sql`UPDATE testers SET earnings_cents = earnings_cents + ${updated.amount_cents} WHERE id = ${updated.tester_id}`;
+    }
+
+    return updated;
   });
 
   // ── Email Templates ──────────────────────────────────────────

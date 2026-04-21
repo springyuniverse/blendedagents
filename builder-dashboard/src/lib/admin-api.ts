@@ -566,3 +566,71 @@ export function reviewTweetReward(id: string, action: 'approve' | 'reject', reas
     body: JSON.stringify({ action, reason }),
   });
 }
+
+// ── Regional Rates ──────────────────────────────────────────
+
+export interface RegionalRate {
+  id: string;
+  region: string;
+  label: string | null;
+  base_pay_cents: number;
+  per_step_rate_cents: number;
+  min_base_cents: number;
+  max_base_cents: number;
+  is_active: boolean;
+}
+
+export function getRegionalRates() {
+  return request<{ rates: RegionalRate[] }>('/rates');
+}
+
+export function updateRegionalRate(id: string, data: { base_pay_cents?: number; per_step_rate_cents?: number; is_active?: boolean }) {
+  return request<RegionalRate>(`/rates/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Commission ──────────────────────────────────────────────
+
+export function getCommissionRate() {
+  return request<{ platform_commission_pct: number }>('/commission');
+}
+
+export function updateCommissionRate(platform_commission_pct: number) {
+  return request<{ platform_commission_pct: number }>('/commission', {
+    method: 'PATCH',
+    body: JSON.stringify({ platform_commission_pct }),
+  });
+}
+
+// ── Withdrawals ─────────────────────────────────────────────
+
+export interface WithdrawalRequest {
+  id: string;
+  tester_id: string;
+  tester_name: string;
+  tester_email: string;
+  amount_cents: number;
+  paypal_email: string;
+  status: string;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function getWithdrawals(params?: { status?: string; page?: number; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.status) query.set('status', params.status);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return request<{ withdrawals: WithdrawalRequest[]; total: number; page: number; per_page: number; total_pages: number }>(`/withdrawals${qs ? `?${qs}` : ''}`);
+}
+
+export function updateWithdrawal(id: string, data: { status: string; admin_notes?: string }) {
+  return request<WithdrawalRequest>(`/withdrawals/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
