@@ -35,6 +35,10 @@ export default function RootPage() {
         return;
       }
 
+      // Identify user in PostHog
+      const { identifyUser } = await import('@/lib/posthog');
+      identifyUser(user.id, { email: user.email });
+
       // Check admin first — if their email is in ADMIN_EMAILS, route to admin panel
       const isAdmin = await checkAdminAccess();
       if (isAdmin) {

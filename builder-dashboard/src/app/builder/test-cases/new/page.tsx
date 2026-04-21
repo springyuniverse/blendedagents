@@ -49,7 +49,9 @@ function NewTestCaseForm() {
 
   const mutation = useMutation({
     mutationFn: createTestCase,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      const { trackEvent } = await import('@/lib/posthog');
+      trackEvent('test_case_created', { test_id: data.id, template_type: templateType, credit_cost: data.credit_cost });
       queryClient.invalidateQueries({ queryKey: ['test-cases'] });
       queryClient.invalidateQueries({ queryKey: ['credit-balance'] });
       router.push(`/builder/test-cases/${data.id}`);

@@ -32,6 +32,8 @@ export default function BuilderSignupPage() {
       });
 
       if (authError) throw new Error(authError.message);
+      const { trackEvent } = await import('@/lib/posthog');
+      trackEvent('builder_signed_up', { email });
       router.push('/login?message=Check your email to confirm your account');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');

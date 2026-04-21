@@ -34,7 +34,11 @@ function AddCreditsModal({ onClose }: { onClose: () => void }) {
 
   const buyMutation = useMutation({
     mutationFn: () => topup(amountCents),
-    onSuccess: (data) => { window.location.href = data.checkout_url; },
+    onSuccess: async (data) => {
+      const { trackEvent } = await import('@/lib/posthog');
+      trackEvent('credits_purchase_started', { amount_cents: amountCents });
+      window.location.href = data.checkout_url;
+    },
   });
 
   const handleCustomChange = (val: string) => {
