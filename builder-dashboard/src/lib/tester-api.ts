@@ -81,6 +81,12 @@ export interface StepResultData {
   created_at: string;
 }
 
+export interface WithdrawalResponse {
+  status: string;
+  amount_cents: number;
+  paypal_email: string;
+}
+
 export interface TesterProfile {
   id: string;
   display_name: string;
@@ -94,6 +100,7 @@ export interface TesterProfile {
   is_active: boolean;
   onboarded: boolean;
   timezone: string | null;
+  paypal_email: string | null;
   tasks_total: number;
   tasks_completed: number;
   avg_completion_minutes: number;
@@ -244,11 +251,14 @@ export const testerApi = {
 
   getProfile: () => request<TesterProfile>('/profile'),
 
-  updateProfile: (data: { display_name?: string; timezone?: string }) =>
+  updateProfile: (data: { display_name?: string; timezone?: string; paypal_email?: string }) =>
     request<TesterProfile>('/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+
+  withdraw: () =>
+    request<WithdrawalResponse>('/withdraw', { method: 'POST' }),
 
   toggleAvailability: (isAvailable: boolean) =>
     request<{ is_available: boolean }>('/availability', {

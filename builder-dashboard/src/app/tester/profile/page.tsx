@@ -15,12 +15,14 @@ export default function ProfilePage() {
 
   const [displayName, setDisplayName] = useState('');
   const [timezone, setTimezone] = useState('');
+  const [paypalEmail, setPaypalEmail] = useState('');
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name);
       setTimezone(profile.timezone || '');
+      setPaypalEmail(profile.paypal_email || '');
     }
   }, [profile]);
 
@@ -29,10 +31,16 @@ export default function ProfilePage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['tester-profile'] }); setIsDirty(false); },
   });
 
+  const withdrawMutation = useMutation({
+    mutationFn: () => testerApi.withdraw(),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['tester-profile'] }); },
+  });
+
   const handleSave = () => {
     const updates: Record<string, string> = {};
     if (displayName !== profile?.display_name) updates.display_name = displayName;
     if (timezone !== (profile?.timezone || '')) updates.timezone = timezone;
+    if (paypalEmail !== (profile?.paypal_email || '')) updates.paypal_email = paypalEmail;
     if (Object.keys(updates).length > 0) mutation.mutate(updates);
   };
 
@@ -111,7 +119,7 @@ export default function ProfilePage() {
               className="bg-accent-review hover:bg-accent-review/90 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors">
               {mutation.isPending ? 'Saving...' : 'Save Changes'}
             </button>
-            <button onClick={() => { setDisplayName(profile.display_name); setTimezone(profile.timezone || ''); setIsDirty(false); }}
+            <button onClick={() => { setDisplayName(profile.display_name); setTimezone(profile.timezone || ''); setPaypalEmail(profile.paypal_email || ''); setIsDirty(false); }}
               className="text-sm text-text-secondary hover:text-text-primary transition-colors">
               Cancel
             </button>
@@ -120,6 +128,47 @@ export default function ProfilePage() {
 
         {mutation.isError && <p className="text-xs text-accent-danger">Failed to save: {mutation.error?.message}</p>}
         {mutation.isSuccess && !isDirty && <p className="text-xs text-accent-review">Settings updated</p>}
+      </div>
+
+      {/* Payout Settings */}
+      <div className="bg-surface border border-border rounded-lg p-6 space-y-4">
+        <h2 className="text-sm font-semibold text-text-primary">Payout Settings</h2>
+
+        <div>
+          <label className="block text-xs font-medium text-text-secondary mb-1">PayPal Email</label>
+          <input type="email" value={paypalEmail} onChange={(e) => handleFieldChange(setPaypalEmail, e.target.value)}
+            placeholder="your-paypal@email.com"
+            className="w-full bg-surface-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-review/50 focus:border-accent-review/50" />
+          <p className="text-xs text-text-muted mt-1">Earnings will be sent to this PayPal account when you withdraw.</p>
+        </div>
+
+        <div className="bg-surface-secondary rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-text-primary">Available Balance</p>
+            <p className="text-2xl font-semibold text-text-primary">${(profile.earnings_cents / 100).toFixed(2)}</p>
+            {profile.earnings_cents < 10000 && (
+              <p className="text-xs text-text-muted mt-1">Minimum withdrawal: $100.00{profile.earnings_cents > 0 ? ` — $${((10000 - profile.earnings_cents) / 100).toFixed(2)} more to go` : ''}</p>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              if (confirm(`Withdraw $${(profile.earnings_cents / 100).toFixed(2)} to ${profile.paypal_email || paypalEmail}?`)) {
+                withdrawMutation.mutate();
+              }
+            }}
+            disabled={profile.earnings_cents < 10000 || !profile.paypal_email || withdrawMutation.isPending}
+            className="px-5 py-2.5 bg-accent-review text-white text-sm font-medium rounded-lg hover:bg-accent-review/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {withdrawMutation.isPending ? 'Processing...' : 'Withdraw'}
+          </button>
+        </div>
+
+        {withdrawMutation.isSuccess && (
+          <p className="text-xs text-accent-review">Withdrawal request submitted. You&apos;ll receive your payout within 3 business days.</p>
+        )}
+        {withdrawMutation.isError && (
+          <p className="text-xs text-accent-danger">{(withdrawMutation.error as Error).message}</p>
+        )}
       </div>
 
       {/* Statistics */}

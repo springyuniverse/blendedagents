@@ -10,7 +10,7 @@ import { TesterModel } from '../models/tester.js';
 import { TesterInviteModel } from '../models/tester-invite.js';
 import { pickRandomAssessment } from '../services/sandbox-scoring.service.js';
 import { Errors } from '../lib/errors.js';
-import { EmailService } from '../lib/email.js';
+import { EmailService, sendAdminNotification } from '../lib/email.js';
 import { generateInviteCode } from '../lib/invite-code.js';
 import sql from '../lib/db.js';
 
@@ -65,6 +65,7 @@ const profileUpdateSchema = {
     properties: {
       display_name: { type: 'string', minLength: 1, maxLength: 100 },
       timezone: { type: 'string', minLength: 1, maxLength: 100 },
+      paypal_email: { type: 'string', maxLength: 255 },
     },
     additionalProperties: false,
   },
@@ -722,6 +723,7 @@ export async function testerRoutes(app: FastifyInstance) {
       is_active: tester.is_active,
       onboarded: tester.onboarded,
       timezone: tester.timezone,
+      paypal_email: tester.paypal_email,
       tasks_total: tester.tasks_total,
       tasks_completed: tester.tasks_completed,
       avg_completion_minutes: tester.avg_completion_minutes,
@@ -816,14 +818,16 @@ export async function testerRoutes(app: FastifyInstance) {
     Body: {
       display_name?: string;
       timezone?: string;
+      paypal_email?: string;
     };
   }>) => {
     const tester = request.tester!;
-    const { display_name, timezone } = request.body;
+    const { display_name, timezone, paypal_email } = request.body;
 
     const updateData: Record<string, unknown> = {};
     if (display_name !== undefined) updateData.display_name = display_name;
     if (timezone !== undefined) updateData.timezone = timezone;
+    if (paypal_email !== undefined) updateData.paypal_email = paypal_email;
 
     if (Object.keys(updateData).length === 0) {
       throw Errors.badRequest('No fields to update');
@@ -844,12 +848,52 @@ export async function testerRoutes(app: FastifyInstance) {
       is_active: updated.is_active,
       onboarded: updated.onboarded,
       timezone: updated.timezone,
+      paypal_email: updated.paypal_email,
       tasks_total: updated.tasks_total,
       tasks_completed: updated.tasks_completed,
       avg_completion_minutes: updated.avg_completion_minutes,
       earnings_cents: updated.earnings_cents,
       created_at: updated.created_at.toISOString(),
     };
+  });
+
+  // POST /withdraw — request payout (min $100)
+  app.post('/withdraw', async (request: FastifyRequest, reply: FastifyReply) => {
+    const tester = request.tester!;
+    const fresh = await TesterModel.findById(tester.id);
+    if (!fresh) throw Errors.notFound('Tester');
+    if (!fresh.paypal_email) {
+      throw Errors.badRequest('Add your PayPal email in settings before requesting a withdrawal');
+    }
+    if (fresh.earnings_cents < 10000) {
+      throw Errors.badRequest('Minimum withdrawal amount is $100.00', {
+        earnings_cents: fresh.earnings_cents,
+        minimum_cents: 10000,
+      });
+    }
+
+    // Record withdrawal request — admin processes manually for now
+    const amountCents = fresh.earnings_cents;
+    await sql`
+      INSERT INTO withdrawal_requests (tester_id, amount_cents, paypal_email, status)
+      VALUES (${tester.id}, ${amountCents}, ${fresh.paypal_email}, 'pending')
+    `;
+
+    // Reset tester earnings
+    await sql`UPDATE testers SET earnings_cents = 0 WHERE id = ${tester.id}`;
+
+    // Notify admin
+    sendAdminNotification('payout_processed', {
+      actorName: fresh.display_name,
+      actorEmail: fresh.email,
+      message: `${fresh.display_name} requested a withdrawal of $${(amountCents / 100).toFixed(2)} to ${fresh.paypal_email}`,
+    });
+
+    reply.status(200).send({
+      status: 'pending',
+      amount_cents: amountCents,
+      paypal_email: fresh.paypal_email,
+    });
   });
 
   // PUT /availability — toggle availability
