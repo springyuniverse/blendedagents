@@ -18,13 +18,14 @@ interface StepResultProps {
   onComplete: (stepIndex: number, result: StepResultData) => void;
 }
 
-type StepStatus = 'passed' | 'failed' | 'blocked' | 'skipped';
+type StepStatus = 'passed' | 'failed' | 'blocked' | 'skipped' | 'missing_info';
 
 const statusColors: Record<StepStatus, string> = {
   passed: 'border-accent-review/30 bg-accent-review/10',
   failed: 'border-accent-danger/30 bg-accent-danger/10',
   blocked: 'border-accent-warning/30 bg-accent-warning/10',
   skipped: 'border-border bg-surface-secondary',
+  missing_info: 'border-orange-500/30 bg-orange-500/10',
 };
 
 const statusIcons: Record<StepStatus, string> = {
@@ -32,11 +33,14 @@ const statusIcons: Record<StepStatus, string> = {
   failed: 'text-accent-danger',
   blocked: 'text-accent-warning',
   skipped: 'text-text-muted',
+  missing_info: 'text-orange-500',
 };
 
 export function StepResult({ stepIndex, instruction, expected, taskId, isActive, isCompleted, result, disabled, extensionScreenshots, onComplete }: StepResultProps) {
   const [showFailForm, setShowFailForm] = useState(false);
   const [showSkipForm, setShowSkipForm] = useState(false);
+  const [showMissingInfoForm, setShowMissingInfoForm] = useState(false);
+  const [missingInfoMessage, setMissingInfoMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [severity, setSeverity] = useState<string>('major');
   const [actualBehavior, setActualBehavior] = useState('');
@@ -57,8 +61,9 @@ export function StepResult({ stepIndex, instruction, expected, taskId, isActive,
   }, [extensionScreenshots]);
 
   const handleAction = async (status: StepStatus) => {
-    if (status === 'failed') { setShowFailForm(true); setShowSkipForm(false); return; }
-    if (status === 'skipped') { setShowSkipForm(true); setShowFailForm(false); return; }
+    if (status === 'failed') { setShowFailForm(true); setShowSkipForm(false); setShowMissingInfoForm(false); return; }
+    if (status === 'skipped') { setShowSkipForm(true); setShowFailForm(false); setShowMissingInfoForm(false); return; }
+    if (status === 'missing_info') { setShowMissingInfoForm(true); setShowFailForm(false); setShowSkipForm(false); return; }
 
     setIsSubmitting(true);
     try {
@@ -105,6 +110,20 @@ export function StepResult({ stepIndex, instruction, expected, taskId, isActive,
     }
   };
 
+  const handleMissingInfoSubmit = async () => {
+    if (!missingInfoMessage.trim()) { alert('Describe what info is missing.'); return; }
+    setIsSubmitting(true);
+    try {
+      const stepResult = await testerApi.submitStepResult(taskId, stepIndex, { status: 'missing_info', notes: missingInfoMessage.trim() });
+      onComplete(stepIndex, { id: stepResult.id, step_index: stepResult.step_index, status: 'missing_info', severity: null, actual_behavior: null, screenshot_url: null, notes: missingInfoMessage.trim(), created_at: stepResult.created_at });
+      setShowMissingInfoForm(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to submit');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const completedStatus = result?.status as StepStatus | undefined;
 
   return (
@@ -135,6 +154,11 @@ export function StepResult({ stepIndex, instruction, expected, taskId, isActive,
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.688c0-.864.933-1.405 1.683-.977l7.108 4.062a1.125 1.125 0 010 1.953l-7.108 4.062A1.125 1.125 0 013 16.81V8.688zM12.75 8.688c0-.864.933-1.405 1.683-.977l7.108 4.062a1.125 1.125 0 010 1.953l-7.108 4.062a1.125 1.125 0 01-1.683-.977V8.688z" />
                 </svg>
               )}
+              {completedStatus === 'missing_info' && (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+                </svg>
+              )}
             </span>
           ) : (
             <span className="flex items-center justify-center w-5 h-5 rounded-full border border-border text-xs text-text-secondary font-medium">
@@ -157,6 +181,9 @@ export function StepResult({ stepIndex, instruction, expected, taskId, isActive,
               )}
               {(result.status === 'skipped' || result.status === 'blocked') && result.notes && (
                 <p className="text-text-secondary italic">Reason: {result.notes}</p>
+              )}
+              {result.status === 'missing_info' && result.notes && (
+                <p className="text-orange-500 italic">Missing: {result.notes}</p>
               )}
             </div>
           )}
@@ -183,7 +210,7 @@ export function StepResult({ stepIndex, instruction, expected, taskId, isActive,
         </div>
       )}
 
-      {isActive && !isCompleted && !showFailForm && !showSkipForm && (
+      {isActive && !isCompleted && !showFailForm && !showSkipForm && !showMissingInfoForm && (
         <div className="mt-3 flex items-center gap-2 ml-8">
           <button onClick={() => handleAction('passed')} disabled={isSubmitting || disabled}
             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent-review text-white hover:bg-accent-review/90 disabled:opacity-50 transition-colors">
@@ -200,6 +227,10 @@ export function StepResult({ stepIndex, instruction, expected, taskId, isActive,
           <button onClick={() => handleAction('skipped')} disabled={isSubmitting || disabled}
             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-text-muted text-white hover:bg-text-secondary disabled:opacity-50 transition-colors">
             Skip
+          </button>
+          <button onClick={() => handleAction('missing_info')} disabled={isSubmitting || disabled}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500 text-white hover:bg-orange-500/90 disabled:opacity-50 transition-colors">
+            Missing Info
           </button>
         </div>
       )}
@@ -319,6 +350,28 @@ export function StepResult({ stepIndex, instruction, expected, taskId, isActive,
               {isSubmitting ? 'Submitting...' : 'Skip Step'}
             </button>
             <button onClick={() => setShowSkipForm(false)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showMissingInfoForm && (
+        <div className="mt-3 ml-8 space-y-3 bg-surface border border-orange-500/20 rounded-lg p-3">
+          <div>
+            <label className="block text-xs font-semibold text-orange-500 mb-1">What info is missing? *</label>
+            <textarea value={missingInfoMessage} onChange={(e) => setMissingInfoMessage(e.target.value)}
+              placeholder="e.g. The instruction says to click 'Checkout' but I can't find that button. Is it behind a login? What page should I be on?"
+              rows={3}
+              className="w-full bg-surface-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted resize-none focus:outline-none focus:ring-1 focus:ring-orange-500/50 focus:border-orange-500/50" />
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleMissingInfoSubmit} disabled={isSubmitting || !missingInfoMessage.trim()}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500 text-white hover:bg-orange-500/90 disabled:opacity-50 transition-colors">
+              {isSubmitting ? 'Submitting...' : 'Request Info'}
+            </button>
+            <button onClick={() => { setShowMissingInfoForm(false); setMissingInfoMessage(''); }}
               className="px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary transition-colors">
               Cancel
             </button>

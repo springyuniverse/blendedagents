@@ -82,8 +82,6 @@ export default function TaskExecutionPage() {
   const [completedSteps, setCompletedSteps] = useState<Map<number, StepResultData>>(new Map());
   const [isStarting, setIsStarting] = useState(false);
   const [showSubmission, setShowSubmission] = useState(false);
-  const [showInfoRequest, setShowInfoRequest] = useState(false);
-  const [infoMessage, setInfoMessage] = useState('');
 
   const { isRecording, isUploading, recordings, startRecording, stopRecording, removeRecording } = useScreenRecording(taskId);
 
@@ -148,18 +146,6 @@ export default function TaskExecutionPage() {
   const isCompleted = task ? COMPLETED_STATUSES.has(task.status) : false;
   const isNeedsInfo = task?.status === 'needs_info';
 
-  const handleRequestInfo = async () => {
-    if (!infoMessage.trim()) return;
-    try {
-      await testerApi.requestInfo(taskId, infoMessage.trim());
-      setInfoMessage('');
-      setShowInfoRequest(false);
-      queryClient.invalidateQueries({ queryKey: ['tester-task', taskId] });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to send info request');
-    }
-  };
-
   const { data: completedResult } = useQuery({
     queryKey: ['tester-task-result', taskId],
     queryFn: () => testerApi.getTaskResult(taskId),
@@ -213,9 +199,14 @@ export default function TaskExecutionPage() {
 
   if (!task) return <div className="text-sm text-text-secondary py-8 text-center">Task not found</div>;
 
-  const allStepsCompleted = task.steps.length > 0 && completedSteps.size >= task.steps.length;
+  // A step counts as truly done if it has a result that isn't missing_info
+  const isStepDone = (i: number) => {
+    const r = completedSteps.get(i);
+    return r != null && r.status !== 'missing_info';
+  };
+  const allStepsCompleted = task.steps.length > 0 && task.steps.every((_, i) => isStepDone(i));
   const isStarted = task.status === 'in_progress';
-  const currentStepIndex = task.steps.findIndex((_, i) => !completedSteps.has(i));
+  const currentStepIndex = task.steps.findIndex((_, i) => !isStepDone(i));
 
   // Assessment tasks: redirect away on completion — no results shown to tester
   if (isCompleted && isAssessment) {
@@ -263,24 +254,14 @@ export default function TaskExecutionPage() {
             <h2 className="text-xl font-semibold text-text-primary">{task.title}</h2>
             {task.description && <p className="text-sm text-text-secondary mt-1">{task.description}</p>}
           </div>
-          <div className="flex items-center gap-2">
-            {isStarted && (
-              <button
-                onClick={() => setShowInfoRequest(!showInfoRequest)}
-                className="px-3 py-1.5 border border-orange-500/20 text-orange-500 text-xs font-medium rounded-lg hover:bg-orange-500/10 transition-colors"
-              >
-                Need Info
-              </button>
-            )}
-            {isStarted && (
-              <RecordingToggle
-                isRecording={isRecording}
-                isUploading={isUploading}
-                onStart={() => startRecording().catch(() => {})}
-                onStop={() => stopRecording().catch(() => {})}
-              />
-            )}
-          </div>
+          {isStarted && (
+            <RecordingToggle
+              isRecording={isRecording}
+              isUploading={isUploading}
+              onStart={() => startRecording().catch(() => {})}
+              onStop={() => stopRecording().catch(() => {})}
+            />
+          )}
         </div>
 
         <div className="mt-3 flex items-center gap-4 text-xs text-text-secondary">
@@ -293,36 +274,6 @@ export default function TaskExecutionPage() {
           {task.expected_behavior && <span className="text-text-muted">Expected: {task.expected_behavior}</span>}
         </div>
       </div>
-
-      {/* Info request form */}
-      {showInfoRequest && isStarted && (
-        <div className="mb-6 bg-orange-500/5 border border-orange-500/20 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-orange-500 mb-2">Request more info from builder</h4>
-          <p className="text-xs text-text-secondary mb-3">Describe what information is missing or what&apos;s blocking you from completing the test.</p>
-          <textarea
-            value={infoMessage}
-            onChange={(e) => setInfoMessage(e.target.value)}
-            placeholder="e.g. I can't find the checkout button mentioned in step 3. Is it behind a login? What credentials should I use?"
-            rows={3}
-            className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-orange-500/50 resize-none"
-          />
-          <div className="flex items-center gap-2 mt-2">
-            <button
-              onClick={handleRequestInfo}
-              disabled={!infoMessage.trim()}
-              className="px-4 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-500/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Send Request
-            </button>
-            <button
-              onClick={() => { setShowInfoRequest(false); setInfoMessage(''); }}
-              className="px-4 py-1.5 text-text-secondary text-sm rounded-lg hover:bg-surface-secondary transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {!isStarted && !isNeedsInfo && (
         <div className="mb-6">
@@ -381,9 +332,9 @@ export default function TaskExecutionPage() {
         <div className="mb-4 flex items-center gap-3">
           <div className="flex-1 bg-surface-secondary rounded-full h-1.5">
             <div className="bg-accent-review h-1.5 rounded-full transition-all"
-              style={{ width: `${(completedSteps.size / task.steps.length) * 100}%` }} />
+              style={{ width: `${(task.steps.filter((_, i) => isStepDone(i)).length / task.steps.length) * 100}%` }} />
           </div>
-          <span className="text-xs text-text-secondary whitespace-nowrap">{completedSteps.size}/{task.steps.length} steps</span>
+          <span className="text-xs text-text-secondary whitespace-nowrap">{task.steps.filter((_, i) => isStepDone(i)).length}/{task.steps.length} steps</span>
         </div>
       )}
 
@@ -442,9 +393,9 @@ export default function TaskExecutionPage() {
             expected={step.expected}
             taskId={taskId}
             isActive={isStarted && index === currentStepIndex}
-            isCompleted={completedSteps.has(index)}
+            isCompleted={isStepDone(index)}
             result={completedSteps.get(index)}
-            disabled={!isStarted || (index !== currentStepIndex && !completedSteps.has(index))}
+            disabled={!isStarted || (index !== currentStepIndex && !isStepDone(index))}
             extensionScreenshots={stepScreenshots.get(index) ?? null}
             onComplete={handleStepComplete}
           />

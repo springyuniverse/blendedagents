@@ -21,7 +21,7 @@ const stepResultSchema = {
     type: 'object',
     required: ['status'],
     properties: {
-      status: { type: 'string', enum: ['passed', 'failed', 'blocked', 'skipped'] },
+      status: { type: 'string', enum: ['passed', 'failed', 'blocked', 'skipped', 'missing_info'] },
       severity: { type: 'string', enum: ['critical', 'major', 'minor', 'cosmetic'] },
       actual_behavior: { type: 'string' },
       screenshot_url: { type: 'string' },
@@ -480,6 +480,11 @@ export async function testerRoutes(app: FastifyInstance) {
       throw Errors.badRequest('A reason (notes) is required when skipping a step');
     }
 
+    // Validate missing_info requires notes explaining what's missing
+    if (status === 'missing_info' && !notes) {
+      throw Errors.badRequest('A description of what info is missing is required');
+    }
+
     const stepResult = await StepResultModel.create({
       test_case_id: id,
       tester_id: tester.id,
@@ -490,6 +495,29 @@ export async function testerRoutes(app: FastifyInstance) {
       screenshot_url: screenshot_url ?? null,
       notes: notes ?? null,
     });
+
+    // If step is missing_info, transition test case to needs_info
+    if (status === 'missing_info') {
+      const message = `Step ${stepIndex + 1}: ${notes}`;
+      const entry = { from: 'tester' as const, message, at: new Date().toISOString(), user_id: tester.id, step_index: stepIndex };
+      await sql`
+        UPDATE test_cases
+        SET status = 'needs_info',
+            info_requests = info_requests || ${JSON.stringify(entry)}::jsonb,
+            status_history = status_history || ${JSON.stringify({ status: 'needs_info', at: new Date().toISOString(), tester_id: tester.id, note: message })}::jsonb
+        WHERE id = ${task.id}
+      `;
+
+      // Notify builder
+      const [builder] = await sql<{ email: string }[]>`SELECT email FROM builders WHERE id = ${task.builder_id}`;
+      if (builder) {
+        EmailService.sendInfoRequested(builder.email, {
+          title: task.title,
+          shortId: task.short_id,
+          testerMessage: message,
+        }).catch(() => {});
+      }
+    }
 
     reply.status(201).send({
       id: stepResult.id,
