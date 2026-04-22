@@ -167,10 +167,17 @@ export const CreditService = {
       // 2. Calculate amounts
       const rate = await CreditRateConfigModel.getCurrentRate();
       const builderChargeCents = creditAmount * rate.per_credit_rate_cents;
-      const testerPayoutCents = calculatePayout(lockedRate);
-      const commission = calculateCommission(builderChargeCents, testerPayoutCents);
+      const grossPayoutCents = calculatePayout(lockedRate);
 
-      // 3. Insert charge transaction (builder)
+      // 3. Get platform commission rate and calculate net tester payout
+      const [settings] = await tx<{ platform_commission_pct: string }[]>`
+        SELECT platform_commission_pct FROM platform_settings WHERE id = 1
+      `;
+      const commissionPct = parseFloat(settings?.platform_commission_pct ?? '50');
+      const commissionCents = Math.round(grossPayoutCents * commissionPct / 100);
+      const netPayoutCents = grossPayoutCents - commissionCents;
+
+      // 4. Insert charge transaction (builder)
       await TransactionModel.insert({
         type: 'charge',
         builder_id: builderId,
@@ -183,38 +190,54 @@ export const CreditService = {
         idempotency_key: `charge:${testCaseId}`,
       }, tx);
 
-      // 4. Insert payout transaction (tester)
+      // 5. Insert payout transaction (tester gets NET after commission)
       await TransactionModel.insert({
         type: 'payout',
         builder_id: builderId,
         tester_id: testerId,
         test_case_id: testCaseId,
         credit_amount: 0,
-        currency_amount_cents: testerPayoutCents,
-        description: `Tester payout: ${stepsCount}-step test ${testCaseId}`,
+        currency_amount_cents: netPayoutCents,
+        description: `Tester payout: ${stepsCount}-step test (${commissionPct}% commission applied)`,
         reference_id: testCaseId,
         idempotency_key: `payout:${testCaseId}`,
       }, tx);
 
-      // 5. Insert commission transaction (platform)
+      // 6. Insert commission transaction (platform keeps commission from tester payout)
       await TransactionModel.insert({
         type: 'commission',
         builder_id: builderId,
         tester_id: testerId,
         test_case_id: testCaseId,
         credit_amount: 0,
-        currency_amount_cents: commission.commission_amount_cents,
-        commission_pct: commission.commission_pct,
-        commission_amount_cents: commission.commission_amount_cents,
-        description: `Platform commission: ${stepsCount}-step test ${testCaseId}`,
+        currency_amount_cents: commissionCents,
+        commission_pct: commissionPct,
+        commission_amount_cents: commissionCents,
+        description: `Platform commission (${commissionPct}%): ${stepsCount}-step test ${testCaseId}`,
         reference_id: testCaseId,
         idempotency_key: `commission:${testCaseId}`,
       }, tx);
 
-      // 6. Update tester earnings
+      // 7. Platform also keeps the residual (builder charge - gross payout)
+      const residualCents = builderChargeCents - grossPayoutCents;
+      if (residualCents > 0) {
+        await TransactionModel.insert({
+          type: 'commission',
+          builder_id: builderId,
+          tester_id: testerId,
+          test_case_id: testCaseId,
+          credit_amount: 0,
+          currency_amount_cents: residualCents,
+          description: `Platform margin: builder charge surplus ${testCaseId}`,
+          reference_id: testCaseId,
+          idempotency_key: `margin:${testCaseId}`,
+        }, tx);
+      }
+
+      // 8. Update tester earnings with NET amount (what they actually receive)
       await tx`
         UPDATE testers
-        SET earnings_cents = earnings_cents + ${testerPayoutCents}
+        SET earnings_cents = earnings_cents + ${netPayoutCents}
         WHERE id = ${testerId}
       `;
     });

@@ -706,14 +706,13 @@ export async function testerRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /profile — get tester profile (earnings shown after platform commission)
+  // GET /profile — get tester profile (earnings_cents is already NET after commission)
   app.get('/profile', async (request: FastifyRequest) => {
     const tester = request.tester!;
     const [settings] = await sql<{ platform_commission_pct: string }[]>`
       SELECT platform_commission_pct FROM platform_settings WHERE id = 1
     `;
     const commissionPct = parseFloat(settings?.platform_commission_pct ?? '50');
-    const netEarnings = Math.round(tester.earnings_cents * (1 - commissionPct / 100));
 
     return {
       id: tester.id,
@@ -732,8 +731,7 @@ export async function testerRoutes(app: FastifyInstance) {
       tasks_total: tester.tasks_total,
       tasks_completed: tester.tasks_completed,
       avg_completion_minutes: tester.avg_completion_minutes,
-      earnings_cents: netEarnings,
-      gross_earnings_cents: tester.earnings_cents,
+      earnings_cents: tester.earnings_cents,
       platform_commission_pct: commissionPct,
       created_at: tester.created_at.toISOString(),
     };
@@ -872,22 +870,15 @@ export async function testerRoutes(app: FastifyInstance) {
     if (!fresh.paypal_email) {
       throw Errors.badRequest('Add your PayPal email in settings before requesting a withdrawal');
     }
-    // Apply platform commission to calculate net withdrawable amount
-    const [commSettings] = await sql<{ platform_commission_pct: string }[]>`
-      SELECT platform_commission_pct FROM platform_settings WHERE id = 1
-    `;
-    const commPct = parseFloat(commSettings?.platform_commission_pct ?? '50');
-    const netEarnings = Math.round(fresh.earnings_cents * (1 - commPct / 100));
-
-    if (netEarnings < 10000) {
+    // earnings_cents is already NET (commission deducted at transaction time)
+    if (fresh.earnings_cents < 10000) {
       throw Errors.badRequest('Minimum withdrawal amount is $100.00', {
-        earnings_cents: netEarnings,
+        earnings_cents: fresh.earnings_cents,
         minimum_cents: 10000,
       });
     }
 
-    // Record withdrawal request with net amount (after commission)
-    const amountCents = netEarnings;
+    const amountCents = fresh.earnings_cents;
     await sql`
       INSERT INTO withdrawal_requests (tester_id, amount_cents, paypal_email, status)
       VALUES (${tester.id}, ${amountCents}, ${fresh.paypal_email}, 'pending')
