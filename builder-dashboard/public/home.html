@@ -554,6 +554,104 @@
       z-index: 1;
     }
 
+    /* ─── HERO STEPS ─── */
+    .hero-steps {
+      width: 100%;
+      max-width: 560px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+      z-index: 1;
+      text-align: left;
+    }
+    .hero-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 18px 20px;
+      border: 1px solid var(--border-mid);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .hero-step--primary {
+      border-color: rgba(52, 211, 153, 0.35);
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.06) 0%, rgba(255, 255, 255, 0.02) 60%);
+    }
+    .hero-step-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(52, 211, 153, 0.12);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .hero-step-body { flex: 1; min-width: 0; }
+    .hero-step-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--fg);
+      margin-bottom: 4px;
+      letter-spacing: -0.2px;
+    }
+    .hero-step-desc {
+      font-size: 13px;
+      color: var(--fg-muted);
+      line-height: 1.6;
+    }
+    .hero-step-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 10px 20px;
+      background: var(--fg);
+      color: var(--bg);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+      min-height: 40px;
+      transition: transform 0.15s, opacity 0.15s, box-shadow 0.2s;
+    }
+    .hero-step-cta:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px -6px rgba(250, 250, 250, 0.18);
+    }
+    .hero-step-cta:active { transform: translateY(0); }
+    .hero-step-terminal {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.25);
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .hero-step-terminal .prompt { color: var(--fg-dim); }
+    .hero-step-terminal .str { color: var(--fg); }
+    .hero-step-terminal .url { color: var(--green); }
+    @media (max-width: 560px) {
+      .hero-step { padding: 16px; gap: 12px; }
+      .hero-step-num { width: 26px; height: 26px; font-size: 12px; }
+      .hero-step-terminal { font-size: 11.5px; white-space: normal; }
+    }
+
     /* ─── VISION TEASER ─── */
     .vision {
       padding: 80px 24px;
@@ -1279,17 +1377,33 @@
 
     <p class="hero-support">Your AI builds feature by feature. A real human verifies feature by feature. Before you ship, not after.</p>
 
-    <div class="terminal">
-      <div class="terminal-header">
-        <div class="terminal-dots"><span></span><span></span><span></span></div>
-        <span class="terminal-label">terminal</span>
-      </div>
-      <div class="terminal-body">
-        <span class="prompt">$ </span><span class="cmd">Tell your AI agent:</span><br>
-        <span class="str">"Read </span><span class="url">blendedagents.com/skill.md</span><span class="str"> and test my app"</span><span class="terminal-cursor"></span>
-      </div>
-    </div>
-    <p class="terminal-hint">One sentence. Your agent handles the rest.</p>
+    <ol class="hero-steps">
+      <li class="hero-step hero-step--primary">
+        <span class="hero-step-num">1</span>
+        <div class="hero-step-body">
+          <div class="hero-step-title">Create your account &amp; get an API key</div>
+          <div class="hero-step-desc">Free to start. No credit card. Under a minute.</div>
+          <a href="/signup/builder" class="hero-step-cta">Start now for free &#8594;</a>
+        </div>
+      </li>
+      <li class="hero-step">
+        <span class="hero-step-num">2</span>
+        <div class="hero-step-body">
+          <div class="hero-step-title">Tell your AI agent</div>
+          <div class="hero-step-desc">Paste one sentence. Your agent handles the rest.</div>
+          <div class="hero-step-terminal">
+            <span class="prompt">$ </span><span class="str">"Read </span><span class="url">blendedagents.com/skill.md</span><span class="str"> and create first test case"</span><span class="terminal-cursor"></span>
+          </div>
+        </div>
+      </li>
+      <li class="hero-step">
+        <span class="hero-step-num">3</span>
+        <div class="hero-step-body">
+          <div class="hero-step-title">A real human verifies — results stream back</div>
+          <div class="hero-step-desc">Real device, full screen recording, structured pass/fail with step-level notes. Usually minutes, not days.</div>
+        </div>
+      </li>
+    </ol>
   </section>
 
   <!-- VISION TEASER -->
